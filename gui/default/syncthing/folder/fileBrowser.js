@@ -15,10 +15,12 @@ angular.module('syncthing.core')
 
         return {
             restrict: 'E',
+            scope: true,
             templateUrl: 'syncthing/folder/fileBrowserView.html',
             link: function (scope) {
                 var tree = null;
                 var cache = {};
+                var pendingTimeouts = [];
 
                 scope.folderId   = null;
                 scope.folderName = null;
@@ -27,15 +29,26 @@ angular.module('syncthing.core')
                 scope.empty      = false;
                 scope.ambiguous  = null;
 
+                function cancelPendingTimeouts() {
+                    pendingTimeouts.forEach(function (h) { $timeout.cancel(h); });
+                    pendingTimeouts = [];
+                }
+
                 // Listen for open requests from anywhere in the app.
                 scope.$on('openFileBrowser', function (evt, data) {
                     scope.folderId   = data.folderId;
                     scope.folderName = data.folderName || data.folderId;
                     scope.ambiguous  = null;
+                    cancelPendingTimeouts();
                     if (tree) { try { tree.destroy(); } catch(e) {} tree = null; }
                     cache = {};
                     $('#fileBrowserModal').modal('show');
                     scope.load();
+                });
+
+                scope.$on('$destroy', function () {
+                    cancelPendingTimeouts();
+                    if (tree) { try { tree.destroy(); } catch(e) {} tree = null; }
                 });
 
                 scope.load = function () {
@@ -139,7 +152,8 @@ angular.module('syncthing.core')
                                     } else {
                                         // Syncthing re-evaluates ignores automatically after a write;
                                         // refresh this node's real status after a short settle delay.
-                                        $timeout(function () { refreshNodeStatus(node); }, 800);
+                                        var h = $timeout(function () { refreshNodeStatus(node); }, 800);
+                                        pendingTimeouts.push(h);
                                     }
                                 });
                         },
@@ -165,7 +179,7 @@ angular.module('syncthing.core')
                 }
 
                 function refreshNodeStatus(node) {
-                    if (!node || !node.key) return;
+                    if (!node || !node.key || !tree) return;
                     var path = node.key.replace(/^\/+/, ''); // db/file wants no leading slash
                     $http.get(
                         urlbase + '/db/file?folder=' + encodeURIComponent(scope.folderId) +
