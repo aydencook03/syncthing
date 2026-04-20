@@ -577,8 +577,14 @@ html[lang|="ko"] i {
   text-align: center;
 }
 
+#editFolder .modal-body {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
 #selective-sync-tree-container {
-  max-height: 350px;
+  max-height: calc(100vh - 420px);
+  min-height: 200px;
   overflow-y: auto;
   border: 1px solid #ddd;
   border-radius: 4px;

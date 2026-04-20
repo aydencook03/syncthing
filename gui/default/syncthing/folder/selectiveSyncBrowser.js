@@ -150,6 +150,15 @@ angular.module('syncthing.core')
                             data.tree.visit(function (node) {
                                 applySelectionToNode(node);
                             });
+                            // If the tree initialized empty but the root-level
+                            // cache has entries (e.g. mount raced with the
+                            // in-place modal transition), reload from the
+                            // cached root nodes.
+                            var rootNode = data.tree.getRootNode();
+                            var hasChildren = rootNode && rootNode.children && rootNode.children.length > 0;
+                            if (!hasChildren && cache[''] && cache[''].length > 0) {
+                                data.tree.reload(toFancyNodes(cache[''], ''));
+                            }
                         },
                         loadChildren: function (event, data) {
                             data.node.visit(function (node) {
@@ -304,9 +313,12 @@ angular.module('syncthing.core')
                 });
 
                 // Kick off initial load when the directive is placed in the DOM.
-                // The modal shows this content inside a tab-pane that is always
-                // rendered when selective sync is enabled, so element is visible.
-                $timeout(loadRoot);
+                // Defer with a zero-delay $timeout so the directive's folderId
+                // binding and the ng-if wrapper's DOM have settled after the
+                // current digest before FancyTree looks for its container.
+                $timeout(function () {
+                    loadRoot();
+                }, 0);
             }
         };
     }]);

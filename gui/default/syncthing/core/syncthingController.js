@@ -2705,11 +2705,18 @@ angular.module('syncthing.core')
                 // touched the tab during this edit (toggled on or off), or
                 // when a managed block already exists in the loaded ignore
                 // file. Otherwise the plain textarea save runs unchanged.
-                if (selectiveSyncService.isTouched($scope.currentFolder.id)
-                    || selectiveSyncService.isEnabled($scope.currentFolder.id)) {
-                    selectiveSyncService.saveToIgnores($scope.currentFolder.id);
-                } else {
-                    saveFolderIgnoresExisting();
+                try {
+                    if (selectiveSyncService.isTouched($scope.currentFolder.id)
+                        || selectiveSyncService.isEnabled($scope.currentFolder.id)) {
+                        var folderId = $scope.currentFolder.id;
+                        console.log('[selective-sync] saveToIgnores called for', folderId);
+                        console.log('[selective-sync] selectedPaths', selectiveSyncService.getSelectedPaths(folderId));
+                        selectiveSyncService.saveToIgnores(folderId);
+                    } else {
+                        saveFolderIgnoresExisting();
+                    }
+                } catch (e) {
+                    console.error('[selective-sync] save error:', e);
                 }
                 $scope.saveConfig().then(function () {
                     hideModal('#editFolder');
