@@ -2698,11 +2698,10 @@ angular.module('syncthing.core')
             $scope.config.folders = folderList($scope.folders);
 
             if ($scope.currentFolder._editing == "existing") {
-                if (selectiveSyncService.isTouched($scope.currentFolder.id) || selectiveSyncService.isEnabled($scope.currentFolder.id)) {
+                if (selectiveSyncService.isTouched($scope.currentFolder.id)) {
                     var _fid = $scope.currentFolder.id;
-                    $scope.saveConfig().then(function () {
-                        return selectiveSyncService.save(_fid);
-                    }).then(function () {
+                    // Run ignore-file save and config save in parallel; close modal when both done.
+                    $q.all([selectiveSyncService.save(_fid), $scope.saveConfig()]).then(function () {
                         hideModal('#editFolder');
                     });
                 } else {
