@@ -110,11 +110,18 @@ angular.module('syncthing.core')
                         updated.splice(parentIdx, 0, whitelist);
                     }
                 } else {
-                    // Remove path/*.
-                    if (dirIdx !== -1) {
-                        updated.splice(dirIdx, 1);
-                    }
-                    // Re-read parentIdx after potential splice.
+                    // Disable SS: remove path/* and all child patterns under path/
+                    // (whitelists like !/path/child and nested catch-alls like path/sub/*
+                    // are only meaningful paired with path/* — without it they're stale).
+                    var prefix = path.slice(1) + '/'; // e.g. 'photos/'
+                    updated = updated.filter(function (pat) {
+                        var bare = (pat[0] === '!') ? pat.slice(1) : pat;
+                        // Strip leading slash if present for comparison.
+                        if (bare[0] === '/') { bare = bare.slice(1); }
+                        return bare !== dirCatchAll && bare.indexOf(prefix) !== 0;
+                    });
+
+                    // Re-read parentIdx after filter.
                     parentIdx = updated.indexOf(parentCatchAll);
 
                     if (parentIdx !== -1) {
