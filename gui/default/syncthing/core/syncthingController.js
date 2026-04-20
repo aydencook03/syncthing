@@ -2734,15 +2734,17 @@ angular.module('syncthing.core')
                         var hasValidText = ignoresText && ignoresText !== 'Loading...';
 
                         if (!enabled && touched) {
-                            // User disabled selective sync: reload current .stignore to
-                            // get accurate userLines (managed block stripped), then save.
-                            // Don't trust $scope.ignores.text — it may never have loaded.
+                            // User disabled selective sync. Reload current .stignore to get
+                            // accurate userLines (managed block stripped), write back, then save config.
                             selectiveSyncService.loadFromIgnores(folderId).then(function () {
-                                selectiveSyncService.saveToIgnores(folderId);
+                                return selectiveSyncService.saveToIgnores(folderId);
+                            }).then(function () {
+                                $scope.saveConfig().then(function () {
+                                    hideModal('#editFolder');
+                                });
                             });
+                            return; // early return — modal close is handled in the promise chain
                         } else {
-                            // Selective sync is enabled (or was just toggled on).
-                            // Sync textarea content back into userLines if valid.
                             if (hasValidText) {
                                 var currentLines = ignoresText.split('\n');
                                 selectiveSyncService.setUserLines(folderId, currentLines);

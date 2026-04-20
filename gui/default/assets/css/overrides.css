@@ -539,12 +539,6 @@ html[lang|="ko"] i {
   margin-right: 4px;
 }
 
-#selective-sync-tree-container .fancytree-node {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
 /* FancyTree renders nested <ul><li>; suppress the default list bullets so
    there's no vertical column of dots to the left of the expand arrows. */
 #selective-sync-tree-container ul,

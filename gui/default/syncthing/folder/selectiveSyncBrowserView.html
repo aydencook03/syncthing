@@ -9,7 +9,9 @@
     <div class="browser-loading" ng-if="loading" style="padding: 20px; text-align: center;">
       <span class="fas fa-spinner fa-spin"></span> <span translate>Loading file tree...</span>
     </div>
-    <div class="browser-error text-danger" ng-if="!loading && error" style="padding: 10px;">{{error}}</div>
+    <div class="browser-error text-muted" ng-if="!loading && error" style="padding: 10px; text-align: center;">
+      {{error}} <a href ng-click="refresh()">Refresh?</a>
+    </div>
     <div id="selective-sync-tree-{{folderId}}" ng-if="!loading && !error"></div>
   </div>
   <div class="browser-footer" ng-if="!loading && !error">

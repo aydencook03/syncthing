@@ -25,7 +25,7 @@ angular.module('syncthing.core')
                 function browseErrorMessage(err) {
                     var status = (err && typeof err.status !== 'undefined') ? err.status : 0;
                     if (status === 500 || status === 503) {
-                        return $translate.instant('File tree not available yet — the folder index may still be syncing. Try refreshing in a moment.');
+                        return $translate.instant('File tree not available yet.');
                     }
                     return 'Failed to load file tree (error ' + status + ').';
                 }
@@ -158,23 +158,15 @@ angular.module('syncthing.core')
                             data.result = def.promise();
                         },
                         init: function (event, data) {
-                            // After initial render, apply selection state for any descendants
                             data.tree.visit(function (node) {
                                 applySelectionToNode(node);
                             });
-                            // If the tree initialized empty but the root-level
-                            // cache has entries (e.g. mount raced with the
-                            // in-place modal transition), reload from the
-                            // cached root nodes.
                             var rootNode = data.tree.getRootNode();
                             var hasChildren = rootNode && rootNode.children && rootNode.children.length > 0;
                             if (!hasChildren && cache[''] && cache[''].length > 0) {
                                 data.tree.reload(toFancyNodes(cache[''], ''));
-                            } else if (!hasChildren) {
-                                // Nothing in cache either — retry the load once
-                                // the DOM/layout has settled.
-                                $timeout(function () { loadRoot(); }, 0);
                             }
+                            // Do NOT retry loadRoot here — it causes spinner flash on every expand
                         },
                         loadChildren: function (event, data) {
                             data.node.visit(function (node) {
