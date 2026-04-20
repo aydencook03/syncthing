@@ -137,25 +137,35 @@ angular.module('syncthing.core')
                         // User toggled a checkbox.
                         select: function (event, data) {
                             var node = data.node;
-                            // node.selected is the NEW state after the click.
-                            // selected=true  → was ignored → user wants to START syncing (wasIgnored=true)
-                            // selected=false → was syncing → user wants to STOP  syncing (wasIgnored=false)
-                            var wasIgnored = node.selected;
                             scope.ambiguous = null;
 
-                            ignoreService.togglePath(scope.folderId, node.key, wasIgnored)
-                                .then(function (result) {
-                                    if (!result.ok) {
-                                        // Revert to prior state and surface the ambiguity notice.
-                                        node.setSelected(!wasIgnored, { noEvents: true });
-                                        scope.$apply(function () { scope.ambiguous = result.ambiguous; });
-                                    } else {
-                                        // Syncthing re-evaluates ignores automatically after a write;
-                                        // refresh this node's real status after a short settle delay.
-                                        var h = $timeout(function () { refreshNodeStatus(node); }, 800);
-                                        pendingTimeouts.push(h);
-                                    }
-                                });
+                            var promise;
+                            if (node.folder) {
+                                // For directories: checkbox = selective sync OFF.
+                                // checked   → SS was ON  → user wants SS OFF (enableSS=false)
+                                // unchecked → SS was OFF → user wants SS ON  (enableSS=true)
+                                var enableSS = !node.selected;
+                                promise = ignoreService.toggleDirSelectiveSync(scope.folderId, node.key, enableSS);
+                            } else {
+                                // For files: checkbox = syncing.
+                                // selected=true  → was ignored → user wants to START syncing
+                                // selected=false → was syncing → user wants to STOP  syncing
+                                var wasIgnored = node.selected;
+                                promise = ignoreService.togglePath(scope.folderId, node.key, wasIgnored);
+                            }
+
+                            promise.then(function (result) {
+                                if (!result.ok) {
+                                    // Revert to prior state and surface the ambiguity notice.
+                                    node.setSelected(!node.selected, { noEvents: true });
+                                    scope.$apply(function () { scope.ambiguous = result.ambiguous; });
+                                } else {
+                                    // Syncthing re-evaluates ignores automatically after a write;
+                                    // refresh this node's real status after a short settle delay.
+                                    var h = $timeout(function () { refreshNodeStatus(node); }, 800);
+                                    pendingTimeouts.push(h);
+                                }
+                            });
                         },
 
                         // Click on folder title → expand/collapse.
@@ -180,18 +190,32 @@ angular.module('syncthing.core')
 
                 function refreshNodeStatus(node) {
                     if (!node || !node.key || !tree) return;
-                    var path = node.key.replace(/^\/+/, ''); // db/file wants no leading slash
-                    $http.get(
-                        urlbase + '/db/file?folder=' + encodeURIComponent(scope.folderId) +
-                        '&file=' + encodeURIComponent(path)
-                    ).then(function (r) {
-                        var ignored = r.data && r.data.local && r.data.local.ignored;
-                        node.setSelected(!ignored, { noEvents: true });
-                        node.data.statusLoaded = true;
-                    }, function () {
-                        // Not in local index yet — leave unchecked.
-                        node.data.statusLoaded = true;
-                    });
+
+                    if (node.folder) {
+                        // For directories: checkbox reflects selective sync state.
+                        // checked = SS off (everything inside syncs).
+                        // unchecked = SS on (path/* exists, nothing inside syncs by default).
+                        ignoreService.hasDirSelectiveSync(scope.folderId, node.key)
+                            .then(function (hasSS) {
+                                if (!tree) return;
+                                node.setSelected(!hasSS, { noEvents: true });
+                                node.data.statusLoaded = true;
+                            });
+                    } else {
+                        var path = node.key.replace(/^\/+/, ''); // db/file wants no leading slash
+                        $http.get(
+                            urlbase + '/db/file?folder=' + encodeURIComponent(scope.folderId) +
+                            '&file=' + encodeURIComponent(path)
+                        ).then(function (r) {
+                            if (!tree) return;
+                            var ignored = r.data && r.data.local && r.data.local.ignored;
+                            node.setSelected(!ignored, { noEvents: true });
+                            node.data.statusLoaded = true;
+                        }, function () {
+                            // Not in local index yet — leave unchecked.
+                            node.data.statusLoaded = true;
+                        });
+                    }
                 }
 
                 scope.openIgnorePatterns = function () {
