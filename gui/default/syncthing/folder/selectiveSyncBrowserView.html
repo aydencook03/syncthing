@@ -1,27 +1,20 @@
-<div class="selective-sync-browser">
-  <div style="display:flex; gap:6px; margin-bottom:6px;">
-    <input type="text" class="form-control" placeholder="Filter by name..." ng-model="filterText" ng-change="onFilter()">
-    <button class="btn btn-default btn-xs" ng-click="refresh()" style="white-space:nowrap;">
-      <span class="fas fa-sync-alt"></span> Refresh
-    </button>
+<div>
+  <div ng-if="loading" style="padding:20px; text-align:center; color:#888;">
+    <span class="fas fa-spinner fa-spin"></span> Loading...
+  </div>
+  <div ng-if="!loading && error" style="padding:10px; text-align:center; color:#888;">
+    {{error}} <a href ng-click="refresh()">Refresh?</a>
+  </div>
+  <div ng-if="!loading && !error && empty" style="padding:20px; text-align:center; color:#888;">
+    No files found — folder index may still be building. <a href ng-click="refresh()">Refresh?</a>
   </div>
   <div class="selective-sync-tree-container">
-    <div ng-if="loading" style="padding:20px; text-align:center; color:#888;">
-      <span class="fas fa-spinner fa-spin"></span> Loading...
-    </div>
-    <div ng-if="!loading && error" style="padding:10px; text-align:center; color:#888;">
-      {{error}} <a href ng-click="refresh()">Refresh?</a>
-    </div>
-    <div ng-if="!loading && !error && empty" style="padding:20px; text-align:center; color:#888;">
-      No files found. The folder index may still be building. <a href ng-click="refresh()">Refresh?</a>
-    </div>
     <div id="selective-sync-tree-{{folderId}}" ng-if="!loading && !error && !empty"></div>
   </div>
-  <div ng-if="!loading && !error && !empty" style="display:flex; align-items:center; padding-top:4px;">
+  <div ng-if="!loading && !error && !empty" style="margin-top:4px;">
     <small class="text-muted">{{selectedCount()}} selected</small>
-    <div class="pull-right">
-      <button class="btn btn-default btn-xs" ng-click="selectAll()">Select All</button>
-      <button class="btn btn-default btn-xs" ng-click="deselectAll()">Deselect All</button>
-    </div>
+    <span class="pull-right">
+      <button class="btn btn-default btn-xs" ng-click="refresh()"><span class="fas fa-sync-alt"></span> Refresh</button>
+    </span>
   </div>
 </div>
