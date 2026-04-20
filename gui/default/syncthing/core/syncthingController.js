@@ -2,7 +2,7 @@ angular.module('syncthing.core')
     .config(function ($locationProvider) {
         $locationProvider.html5Mode({ enabled: true, requireBase: false }).hashPrefix('!');
     })
-    .controller('SyncthingController', function ($scope, $http, $location, LocaleService, Events, $filter, $q, $compile, $timeout, $rootScope, $translate) {
+    .controller('SyncthingController', function ($scope, $http, $location, LocaleService, Events, $filter, $q, $compile, $timeout, $rootScope, $translate, selectiveSyncService) {
         'use strict';
 
         // private/helper definitions
@@ -109,6 +109,7 @@ angular.module('syncthing.core')
         $scope.currentSharing = {};
         $scope.currentFolder = {};
         $scope.currentDevice = {};
+        $scope.selectiveSyncEnabled = false;
         $scope.ignores = {
             text: '',
             error: null,
@@ -2376,6 +2377,7 @@ angular.module('syncthing.core')
                     window.location.hash = "";
                     $scope.currentFolder = {};
                     $scope.ignores = {};
+                    $scope.selectiveSyncEnabled = false;
                 });
             });
             showModal('#editFolder');
@@ -2475,7 +2477,28 @@ angular.module('syncthing.core')
             $scope.currentFolder = angular.copy(folderCfg);
             $scope.currentFolder._editing = "existing";
             editFolderLoadIgnores();
+            // Load selective sync state (non-blocking — updates scope when ready)
+            selectiveSyncService.load(folderCfg.id).then(function () {
+                $scope.selectiveSyncEnabled = selectiveSyncService.isEnabled(folderCfg.id);
+            }).catch(function () {
+                $scope.selectiveSyncEnabled = false;
+            });
             editFolder(initialTab);
+        };
+
+        $scope.onSelectiveSyncToggle = function () {
+            if (!$scope.currentFolder || !$scope.currentFolder.id) return;
+            if ($scope.selectiveSyncEnabled) {
+                selectiveSyncService.enable($scope.currentFolder.id);
+            } else {
+                selectiveSyncService.disable($scope.currentFolder.id);
+            }
+        };
+
+        $scope.onSelectiveSyncTabClick = function () {
+            if ($scope.currentFolder && $scope.currentFolder.id) {
+                $scope.$broadcast('selectiveSyncTabVisible', { folderId: $scope.currentFolder.id });
+            }
         };
 
         function editFolderLoadingIgnores() {
@@ -2675,10 +2698,19 @@ angular.module('syncthing.core')
             $scope.config.folders = folderList($scope.folders);
 
             if ($scope.currentFolder._editing == "existing") {
-                saveFolderIgnoresExisting();
-                $scope.saveConfig().then(function () {
-                    hideModal('#editFolder');
-                });
+                if (selectiveSyncService.isTouched($scope.currentFolder.id) || selectiveSyncService.isEnabled($scope.currentFolder.id)) {
+                    var _fid = $scope.currentFolder.id;
+                    $scope.saveConfig().then(function () {
+                        return selectiveSyncService.save(_fid);
+                    }).then(function () {
+                        hideModal('#editFolder');
+                    });
+                } else {
+                    saveFolderIgnoresExisting();
+                    $scope.saveConfig().then(function () {
+                        hideModal('#editFolder');
+                    });
+                }
                 return;
             }
 
