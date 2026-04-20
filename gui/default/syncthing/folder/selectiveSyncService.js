@@ -77,8 +77,12 @@ angular.module('syncthing.core')
                     var lines = (response.data && response.data.ignore) || [];
                     var parsed = parseStignore(lines);
                     st.userLines = parsed.userLines;
-                    st.selected = new Set(parsed.selected);
-                    st.enabled = parsed.enabled;
+                    // Only import selections from file if the user hasn't made changes yet.
+                    // If touched (e.g. user just disabled), preserve the in-memory enabled/selected state.
+                    if (!st.touched) {
+                        st.selected = new Set(parsed.selected);
+                        st.enabled = parsed.enabled;
+                    }
                     st.loaded = true;
                     return st;
                 });
@@ -198,6 +202,10 @@ angular.module('syncthing.core')
             // retain the genuinely-user portion.
             var parsed = parseStignore(lines || []);
             st.userLines = parsed.userLines;
+            // If the user removed the managed block from the textarea, treat as disabled.
+            if (!parsed.enabled) {
+                st.enabled = false;
+            }
             st.touched = true;
         }
 
