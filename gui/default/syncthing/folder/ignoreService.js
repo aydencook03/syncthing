@@ -18,7 +18,7 @@ angular.module('syncthing.core')
         // surfaced to the user as-is.
         function isLiteral(pattern) {
             var p = (pattern[0] === '!') ? pattern.slice(1) : pattern;
-            return p[0] !== '#' && !/[*?\[{]/.test(p) && p.slice(0, 8) !== '#include';
+            return p[0] !== '#' && !/[*?\[{]/.test(p);
         }
 
         // Normalise a path to always have a leading slash.
@@ -122,7 +122,7 @@ angular.module('syncthing.core')
         // path — so we can show it to the user in the ambiguity notice.
         function findCulprit(patterns) {
             for (var i = 0; i < patterns.length; i++) {
-                if (!isLiteral(patterns[i]) && patterns[i][0] !== '/' && patterns[i] !== '*') {
+                if (!isLiteral(patterns[i]) && patterns[i] !== '*') {
                     return patterns[i];
                 }
             }
