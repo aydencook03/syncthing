@@ -2732,6 +2732,12 @@ angular.module('syncthing.core')
                     if (selectiveSyncService.isTouched($scope.currentFolder.id)
                         || selectiveSyncService.isEnabled($scope.currentFolder.id)) {
                         var folderId = $scope.currentFolder.id;
+                        // Sync textarea content back into the service's
+                        // userLines before saving. Otherwise any edits the
+                        // user made in the Ignore Patterns textarea are
+                        // overwritten when the managed block is re-serialized.
+                        var currentLines = $scope.ignores.text ? $scope.ignores.text.split('\n') : [];
+                        selectiveSyncService.setUserLines(folderId, currentLines);
                         console.log('[selective-sync] saveToIgnores called for', folderId);
                         console.log('[selective-sync] selectedPaths', selectiveSyncService.getSelectedPaths(folderId));
                         selectiveSyncService.saveToIgnores(folderId);

@@ -191,6 +191,16 @@ angular.module('syncthing.core')
             st.selected = new Set();
         }
 
+        function setUserLines(folderId, lines) {
+            var st = ensureState(folderId);
+            // Parse the incoming lines so that if the user pasted or kept the
+            // managed block inside the textarea, we strip it out and only
+            // retain the genuinely-user portion.
+            var parsed = parseStignore(lines || []);
+            st.userLines = parsed.userLines;
+            st.touched = true;
+        }
+
         function getState(folderId) {
             return ensureState(folderId);
         }
@@ -209,6 +219,7 @@ angular.module('syncthing.core')
             isPathSelected: isPathSelected,
             isPathPartial: isPathPartial,
             clearSelections: clearSelections,
+            setUserLines: setUserLines,
             getState: getState,
             isTouched: isTouched
         };

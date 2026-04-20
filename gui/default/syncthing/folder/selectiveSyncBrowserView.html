@@ -5,14 +5,12 @@
       <span class="fas fa-sync-alt"></span> Refresh
     </button>
   </div>
-  <div class="browser-loading" ng-if="loading">
-    <span translate>Loading file tree...</span>
-  </div>
-  <div class="browser-error" ng-if="error">
-    <span class="text-danger">{{error}}</span>
-  </div>
-  <div id="selective-sync-tree-container" ng-if="!loading && !error">
-    <div id="selective-sync-tree-{{folderId}}"></div>
+  <div id="selective-sync-tree-container">
+    <div class="browser-loading" ng-if="loading" style="padding: 20px; text-align: center;">
+      <span class="fas fa-spinner fa-spin"></span> <span translate>Loading file tree...</span>
+    </div>
+    <div class="browser-error text-danger" ng-if="!loading && error" style="padding: 10px;">{{error}}</div>
+    <div id="selective-sync-tree-{{folderId}}" ng-if="!loading && !error"></div>
   </div>
   <div class="browser-footer" ng-if="!loading && !error">
     <small class="text-muted">

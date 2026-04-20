@@ -80,9 +80,21 @@ angular.module('syncthing.core')
                             cache[''] = response.data || [];
                             var rootNodes = toFancyNodes(response.data || [], '');
                             scope.loading = false;
-                            $timeout(function () {
-                                mountTree(rootNodes);
-                            });
+                            // If a tree already exists (e.g. the user reopened
+                            // the modal), reload its contents in place rather
+                            // than remounting. Otherwise defer until ng-if has
+                            // re-inserted the mount point.
+                            if (tree) {
+                                tree.reload(rootNodes).done(function () {
+                                    tree.visit(function (node) {
+                                        applySelectionToNode(node);
+                                    });
+                                });
+                            } else {
+                                $timeout(function () {
+                                    mountTree(rootNodes);
+                                });
+                            }
                         }, function (err) {
                             scope.loading = false;
                             scope.error = browseErrorMessage(err);
