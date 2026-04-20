@@ -26,15 +26,16 @@ angular.module('syncthing.core')
             return (path[0] === '/') ? path : '/' + path;
         }
 
-        // Strip optional leading slash for comparison (Syncthing accepts both).
-        function bare(pattern) {
+        // Ensure a pattern has a leading slash (strips negation prefix first).
+        // Used so we can compare patterns to normalised paths on equal footing.
+        function withSlash(pattern) {
             var p = (pattern[0] === '!') ? pattern.slice(1) : pattern;
             return (p[0] === '/') ? p : '/' + p;
         }
 
         function getPatterns(folderId) {
             return $http.get(urlbase + '/db/ignores?folder=' + encodeURIComponent(folderId))
-                .then(function (r) { return r.data.ignore || []; });
+                .then(function (r) { return (r.data && r.data.ignore) || []; });
         }
 
         function setPatterns(folderId, patterns) {
@@ -62,7 +63,7 @@ angular.module('syncthing.core')
                     idx = -1;
                     for (i = 0; i < patterns.length; i++) {
                         p = patterns[i];
-                        if (isLiteral(p) && p[0] !== '!' && bare(p) === path) {
+                        if (isLiteral(p) && p[0] !== '!' && withSlash(p) === path) {
                             idx = i; break;
                         }
                     }
@@ -90,7 +91,7 @@ angular.module('syncthing.core')
                     idx = -1;
                     for (i = 0; i < patterns.length; i++) {
                         p = patterns[i];
-                        if (isLiteral(p) && p[0] === '!' && bare(p) === path) {
+                        if (isLiteral(p) && p[0] === '!' && withSlash(p) === path) {
                             idx = i; break;
                         }
                     }
@@ -103,7 +104,7 @@ angular.module('syncthing.core')
                     // 2. Already has a literal ignore for this path → no-op.
                     for (i = 0; i < patterns.length; i++) {
                         p = patterns[i];
-                        if (isLiteral(p) && p[0] !== '!' && bare(p) === path) {
+                        if (isLiteral(p) && p[0] !== '!' && withSlash(p) === path) {
                             return ok();
                         }
                     }
