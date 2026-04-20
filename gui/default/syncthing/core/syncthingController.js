@@ -2363,11 +2363,18 @@ angular.module('syncthing.core')
                 initialTab = "#folder-general";
             }
             $('.nav-tabs a[href="' + initialTab + '"]').tab('show');
-            $('#editFolder').one('shown.bs.tab', function (e) {
-                if (e.target.attributes.href.value === "#folder-ignores") {
+            $('#editFolder').on('shown.bs.tab.selectivesync', function (e) {
+                var href = e.target.attributes.href.value;
+                if (href === "#folder-ignores") {
                     $('#folder-ignores textarea').focus();
                 }
+                if (href === "#folder-selective-sync" && $scope.currentFolder && $scope.currentFolder.id) {
+                    $timeout(function () {
+                        $scope.$broadcast('selectiveSyncTabVisible', { folderId: $scope.currentFolder.id });
+                    }, 150);
+                }
             }).one('hidden.bs.modal', function () {
+                $('#editFolder').off('shown.bs.tab.selectivesync');
                 var p = $q.when();
                 // If the modal was closed default patterns should still apply
                 if ($scope.currentFolder._editing == "new-ignores" && !$scope.ignores.saved && $scope.ignores.defaultLines) {
@@ -2749,9 +2756,17 @@ angular.module('syncthing.core')
                             if (folderCfg) {
                                 $scope.currentFolder = angular.copy(folderCfg);
                                 $scope.currentFolder._editing = "existing";
+                                // Re-initialize share editing state; the earlier
+                                // saveFolder pass deleted $scope.currentSharing,
+                                // and a subsequent Save from the selective-sync
+                                // tab would otherwise crash on currentSharing.selected.
+                                initShareEditing('folder');
                                 editFolderLoadIgnores();
                                 editFolderLoadSelectiveSync();
-                                $('.nav-tabs a[href="#folder-selective-sync"]').tab('show');
+                                $timeout(function () {
+                                    $('.nav-tabs a[href="#folder-selective-sync"]').tab('show');
+                                    $scope.$broadcast('selectiveSyncTabVisible', { folderId: newFolderId });
+                                }, 150);
                                 return;
                             }
                         }

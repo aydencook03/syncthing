@@ -158,6 +158,10 @@ angular.module('syncthing.core')
                             var hasChildren = rootNode && rootNode.children && rootNode.children.length > 0;
                             if (!hasChildren && cache[''] && cache[''].length > 0) {
                                 data.tree.reload(toFancyNodes(cache[''], ''));
+                            } else if (!hasChildren) {
+                                // Nothing in cache either — retry the load once
+                                // the DOM/layout has settled.
+                                $timeout(function () { loadRoot(); }, 0);
                             }
                         },
                         loadChildren: function (event, data) {
@@ -309,6 +313,22 @@ angular.module('syncthing.core')
                     if (tree) {
                         try { tree.destroy(); } catch (e) {}
                         tree = null;
+                    }
+                });
+
+                // Parent controller broadcasts this when the Selective Sync tab
+                // becomes visible (either by tab click or by the in-place
+                // transition from the new-folder flow). Belt-and-suspenders
+                // alongside the initial $timeout below: covers the case where
+                // the tab pane was hidden (zero-size) when the directive first
+                // linked and FancyTree couldn't measure its container.
+                scope.$on('selectiveSyncTabVisible', function (event, args) {
+                    if (!args || args.folderId !== scope.folderId) {
+                        return;
+                    }
+                    var empty = !tree || !tree.getRootNode().hasChildren();
+                    if (empty) {
+                        loadRoot();
                     }
                 });
 
