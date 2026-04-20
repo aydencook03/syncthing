@@ -211,10 +211,6 @@
             <p translate class="help-block">Ignore patterns can only be added after the folder is created. If checked, an input field to enter ignore patterns will be presented after saving.</p>
           </div>
           <div ng-switch-default>
-            <div class="alert alert-info" ng-if="selectiveSyncEnabled" role="alert">
-              <strong translate>Selective Sync is managing part of this folder's ignore patterns.</strong>
-              <span translate>The block between the managed markers is generated from your selections on the Selective Sync tab. Manual edits inside that block will be overwritten on save. Patterns above the block are preserved.</span>
-            </div>
             <p translate>Enter ignore patterns, one per line.</p>
             <div ng-class="{'has-error': ignores.error != null}">
               <textarea class="form-control" name="ignoresText" rows="5" ng-model="ignores.text" ng-disabled="ignores.disabled"></textarea>
@@ -242,10 +238,9 @@
               <hr />
               <span translate translate-value-path="{{currentFolder.path}}{{system.pathSeparator}}.stignore">Editing {%path%}.</span>
             </div>
-            <div ng-if="!editingFolderDefaults()" class="help-block small" style="margin-top: 12px; border-top: 1px solid #555; padding-top: 8px;">
-              <span class="fas fa-info-circle"></span>
-              <span translate>Ignore patterns are the underlying mechanism that powers Selective Sync. When Selective Sync is enabled for this folder, the block between the managed markers is generated automatically — use the </span><a href="#folder-selective-sync" data-toggle="tab" translate>Selective Sync tab</a><span translate> to manage your file selections.</span>
-            </div>
+            <p class="help-block small" style="margin-top: 10px;" ng-if="!editingFolderDefaults()">
+              <span translate>Use the Selective Sync tab to more easily manage your file selections.</span>
+            </p>
           </div>
         </div>
 

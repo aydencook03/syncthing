@@ -58,6 +58,7 @@ angular.module('syncthing.core')
             var stripped = stripTrailingBlanks(userLines || []);
             var sorted = (selectedPaths || []).slice().sort();
             var block = [BEGIN_MARKER];
+            block.push('// This block is managed by the Selective Sync tab and will be overwritten on save.');
             sorted.forEach(function (p) {
                 block.push('!' + p);
             });

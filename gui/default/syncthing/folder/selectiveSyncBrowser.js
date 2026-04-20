@@ -131,18 +131,19 @@ angular.module('syncthing.core')
                                 data.result = toFancyNodes(cache[path], path);
                                 return;
                             }
-                            data.result = $.ajax({
-                                url: browseUrl(scope.folderId, path),
-                                dataType: 'json'
-                            }).then(function (items) {
-                                cache[path] = items || [];
-                                return toFancyNodes(items || [], path);
-                            }, function (jqXHR) {
-                                scope.$apply(function () {
-                                    scope.error = browseErrorMessage({ status: jqXHR && jqXHR.status });
-                                });
-                                return $.Deferred().reject(jqXHR).promise();
+                            // Use $http (not $.ajax) so the AngularJS CSRF
+                            // header configured on $httpProvider is sent;
+                            // without it the REST API returns 403.
+                            var def = $.Deferred();
+                            $http.get(browseUrl(scope.folderId, path)).then(function (response) {
+                                var items = response.data || [];
+                                cache[path] = items;
+                                def.resolve(toFancyNodes(items, path));
+                            }, function (err) {
+                                scope.error = browseErrorMessage(err);
+                                def.reject();
                             });
+                            data.result = def.promise();
                         },
                         init: function (event, data) {
                             // After initial render, apply selection state for any descendants
@@ -157,6 +158,15 @@ angular.module('syncthing.core')
                         },
                         select: function (event, data) {
                             onNodeSelect(data.node);
+                        },
+                        click: function (event, data) {
+                            // Clicking a folder row's title should expand/collapse
+                            // rather than activate-select. The checkbox is still
+                            // clickable and drives selection separately.
+                            if (data.targetType === 'title' && data.node.isFolder()) {
+                                data.node.toggleExpanded();
+                                return false;
+                            }
                         }
                     });
 

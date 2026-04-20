@@ -2734,12 +2734,19 @@ angular.module('syncthing.core')
                     }
                     p.finally(function () {
                         if (addSelectiveSync) {
-                            $('#editFolder').one('hidden.bs.modal', function () {
-                                var folderCfg = $scope.folders[newFolderId];
-                                if (folderCfg) {
-                                    $scope.editFolderExisting(folderCfg, '#folder-selective-sync');
-                                }
-                            });
+                            // Transition the open modal from "new" to "existing"
+                            // on the Selective Sync tab, so the user can pick
+                            // files immediately. Mirrors the in-place switch
+                            // that _addIgnores makes to the ignores tab.
+                            var folderCfg = $scope.folders[newFolderId];
+                            if (folderCfg) {
+                                $scope.currentFolder = angular.copy(folderCfg);
+                                $scope.currentFolder._editing = "existing";
+                                editFolderLoadIgnores();
+                                editFolderLoadSelectiveSync();
+                                $('.nav-tabs a[href="#folder-selective-sync"]').tab('show');
+                                return;
+                            }
                         }
                         hideModal('#editFolder');
                     });
