@@ -585,6 +585,16 @@ html[lang|="ko"] i {
   padding: 4px;
 }
 
+#selective-sync-tree-container .fancytree-checkbox {
+  margin-right: 4px;
+}
+
+#selective-sync-tree-container .fancytree-node {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .selective-sync-browser .browser-footer {
   display: flex;
   align-items: center;

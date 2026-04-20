@@ -2701,15 +2701,12 @@ angular.module('syncthing.core')
             $scope.config.folders = folderList($scope.folders);
 
             if ($scope.currentFolder._editing == "existing") {
-                var ssState = selectiveSyncService.getState($scope.currentFolder.id);
-                var ssLoaded = ssState && ssState.loaded;
-                if (ssLoaded && ($scope.selectiveSyncEnabled || ssState.enabled)) {
-                    // Selective sync owns the ignore file while active; skip the
-                    // textarea-based save to avoid racing with saveToIgnores.
-                    selectiveSyncService.saveToIgnores($scope.currentFolder.id);
-                } else if (ssLoaded) {
-                    // Selective sync was toggled off during this edit; persist the
-                    // cleared state so the managed block is stripped from .stignore.
+                // Selective sync owns the ignore file when the user has
+                // touched the tab during this edit (toggled on or off), or
+                // when a managed block already exists in the loaded ignore
+                // file. Otherwise the plain textarea save runs unchanged.
+                if (selectiveSyncService.isTouched($scope.currentFolder.id)
+                    || selectiveSyncService.isEnabled($scope.currentFolder.id)) {
                     selectiveSyncService.saveToIgnores($scope.currentFolder.id);
                 } else {
                     saveFolderIgnoresExisting();
@@ -2720,9 +2717,16 @@ angular.module('syncthing.core')
                 return;
             }
 
+            var newFolderId = $scope.currentFolder.id;
+            var writeSelectiveSyncAfterCreate = selectiveSyncService.isTouched(newFolderId)
+                && selectiveSyncService.isEnabled(newFolderId);
+
             // No ignores to be set on the new folder, save directly.
             if (!$scope.currentFolder._addIgnores) {
                 $scope.saveConfig().then(function () {
+                    if (writeSelectiveSyncAfterCreate) {
+                        selectiveSyncService.saveToIgnores(newFolderId);
+                    }
                     hideModal('#editFolder');
                 });
                 return;

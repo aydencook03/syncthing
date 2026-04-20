@@ -33,7 +33,13 @@ angular.module('syncthing.core')
                 function browseUrl(folderId, prefix) {
                     var url = urlbase + '/db/browse?folder=' + encodeURIComponent(folderId) + '&levels=1';
                     if (prefix) {
-                        url += '&prefix=' + encodeURIComponent(prefix);
+                        // db/browse expects a folder-root-relative path without
+                        // a leading slash. Internal paths are stored with a
+                        // leading '/' for selection bookkeeping; strip it here.
+                        var stripped = prefix.replace(/^\/+/, '');
+                        if (stripped) {
+                            url += '&prefix=' + encodeURIComponent(stripped);
+                        }
                     }
                     return url;
                 }
@@ -102,6 +108,8 @@ angular.module('syncthing.core')
                         checkbox: true,
                         selectMode: 3,
                         quicksearch: true,
+                        clickFolderMode: 4,
+                        autoActivate: false,
                         filter: {
                             hideExpanders: true,
                             mode: 'hide'

@@ -11,7 +11,9 @@
   <div class="browser-error" ng-if="error">
     <span class="text-danger">{{error}}</span>
   </div>
-  <div id="selective-sync-tree-{{folderId}}" ng-if="!loading && !error"></div>
+  <div id="selective-sync-tree-container" ng-if="!loading && !error">
+    <div id="selective-sync-tree-{{folderId}}"></div>
+  </div>
   <div class="browser-footer" ng-if="!loading && !error">
     <small class="text-muted">
       <span>{{selectedCount()}} item(s) selected</span>

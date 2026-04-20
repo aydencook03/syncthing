@@ -99,6 +99,7 @@ angular.module('syncthing.core')
         function enable(folderId) {
             var st = ensureState(folderId);
             st.enabled = true;
+            st.touched = true;
             if (!st.selected) {
                 st.selected = new Set();
             }
@@ -107,7 +108,13 @@ angular.module('syncthing.core')
         function disable(folderId) {
             var st = ensureState(folderId);
             st.enabled = false;
+            st.touched = true;
             st.selected = new Set();
+        }
+
+        function isTouched(folderId) {
+            var st = _state[folderId];
+            return !!(st && st.touched);
         }
 
         function isEnabled(folderId) {
@@ -117,11 +124,13 @@ angular.module('syncthing.core')
 
         function selectPath(folderId, path) {
             var st = ensureState(folderId);
+            st.touched = true;
             st.selected.add(path);
         }
 
         function deselectPath(folderId, path) {
             var st = ensureState(folderId);
+            st.touched = true;
             st.selected.delete(path);
             var prefix = path + '/';
             var toDelete = [];
@@ -177,6 +186,7 @@ angular.module('syncthing.core')
 
         function clearSelections(folderId) {
             var st = ensureState(folderId);
+            st.touched = true;
             st.selected = new Set();
         }
 
@@ -198,6 +208,7 @@ angular.module('syncthing.core')
             isPathSelected: isPathSelected,
             isPathPartial: isPathPartial,
             clearSelections: clearSelections,
-            getState: getState
+            getState: getState,
+            isTouched: isTouched
         };
     }]);

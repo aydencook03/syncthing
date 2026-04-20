@@ -6,8 +6,8 @@
         <li ng-class="{'disabled': currentFolder._editing == 'new-ignores'}"><a data-toggle="tab" href="{{currentFolder._editing == 'new-ignores' ? '' : '#folder-sharing'}}"><span class="fas fa-share-alt"></span> <span translate>Sharing</span></a></li>
         <li ng-class="{'disabled': currentFolder._editing == 'new-ignores'}"><a data-toggle="tab" href="{{currentFolder._editing == 'new-ignores' ? '' : '#folder-versioning'}}"><span class="fa fa-files-o"></span> <span translate>File Versioning</span></a></li>
         <li ng-class="{'disabled': currentFolder._recvEnc}"><a data-toggle="tab" href="{{currentFolder._recvEnc ? '' : '#folder-ignores'}}"><span class="fas fa-filter"></span> <span translate>Ignore Patterns</span></a></li>
-        <li ng-class="{'disabled': currentFolder._editing == 'new-ignores' || currentFolder._recvEnc}">
-          <a data-toggle="tab" href="{{(currentFolder._editing == 'new-ignores' || currentFolder._recvEnc) ? '' : '#folder-selective-sync'}}">
+        <li ng-if="currentFolder._editing == 'existing' && !currentFolder._recvEnc" ng-class="{'disabled': currentFolder._recvEnc}">
+          <a data-toggle="tab" href="{{currentFolder._recvEnc ? '' : '#folder-selective-sync'}}">
             <span class="fas fa-sliders-h"></span> <span translate>Selective Sync</span>
           </a>
         </li>
@@ -214,7 +214,7 @@
           </div>
         </div>
 
-        <div id="folder-selective-sync" class="tab-pane" ng-if="currentFolder._editing != 'new-ignores' && !currentFolder._recvEnc">
+        <div id="folder-selective-sync" class="tab-pane" ng-if="currentFolder._editing == 'existing' && !currentFolder._recvEnc">
           <div class="form-group">
             <label>
               <input type="checkbox" ng-model="selectiveSyncEnabled" ng-change="onSelectiveSyncToggle()">
@@ -231,9 +231,7 @@
             </p>
           </div>
 
-          <div ng-if="selectiveSyncEnabled">
-            <selective-sync-browser folder-id="currentFolder.id"></selective-sync-browser>
-          </div>
+          <selective-sync-browser ng-if="selectiveSyncEnabled && currentFolder._editing == 'existing'" folder-id="currentFolder.id"></selective-sync-browser>
         </div>
 
         <div id="folder-advanced" class="tab-pane">
