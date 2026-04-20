@@ -1,0 +1,24 @@
+<div class="selective-sync-browser">
+  <div class="browser-toolbar">
+    <input type="text" class="form-control" placeholder="Filter by name..." ng-model="filterText" ng-change="onFilter()">
+    <button class="btn btn-default btn-xs" ng-click="refresh()">
+      <span class="fas fa-sync-alt"></span> Refresh
+    </button>
+  </div>
+  <div class="browser-loading" ng-if="loading">
+    <span translate>Loading file tree...</span>
+  </div>
+  <div class="browser-error" ng-if="error">
+    <span class="text-danger">{{error}}</span>
+  </div>
+  <div id="selective-sync-tree-{{folderId}}" ng-if="!loading && !error"></div>
+  <div class="browser-footer" ng-if="!loading && !error">
+    <small class="text-muted">
+      <span>{{selectedCount()}} item(s) selected</span>
+    </small>
+    <div class="pull-right">
+      <button class="btn btn-default btn-xs" ng-click="selectAll()">Select All</button>
+      <button class="btn btn-default btn-xs" ng-click="deselectAll()">Deselect All</button>
+    </div>
+  </div>
+</div>
