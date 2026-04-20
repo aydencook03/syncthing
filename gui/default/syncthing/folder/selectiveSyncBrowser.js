@@ -115,7 +115,7 @@ angular.module('syncthing.core')
                         }
                     });
 
-                    tree = $el.fancytree('getTree');
+                    tree = $.ui.fancytree.getTree($el[0]);
                 }
 
                 function onSelect(node) {
