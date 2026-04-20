@@ -5,12 +5,12 @@
         <li ng-class="{'disabled': currentFolder._editing == 'new-ignores'}" class="active"><a data-toggle="tab" href="{{currentFolder._editing == 'new-ignores' ? '' : '#folder-general'}}"><span class="fas fa-cog"></span> <span translate>General</span></a></li>
         <li ng-class="{'disabled': currentFolder._editing == 'new-ignores'}"><a data-toggle="tab" href="{{currentFolder._editing == 'new-ignores' ? '' : '#folder-sharing'}}"><span class="fas fa-share-alt"></span> <span translate>Sharing</span></a></li>
         <li ng-class="{'disabled': currentFolder._editing == 'new-ignores'}"><a data-toggle="tab" href="{{currentFolder._editing == 'new-ignores' ? '' : '#folder-versioning'}}"><span class="fa fa-files-o"></span> <span translate>File Versioning</span></a></li>
-        <li ng-class="{'disabled': currentFolder._recvEnc}"><a data-toggle="tab" href="{{currentFolder._recvEnc ? '' : '#folder-ignores'}}"><span class="fas fa-filter"></span> <span translate>Ignore Patterns</span></a></li>
-        <li ng-if="currentFolder._editing == 'existing' && !currentFolder._recvEnc" ng-class="{'disabled': currentFolder._recvEnc}">
-          <a data-toggle="tab" href="{{currentFolder._recvEnc ? '' : '#folder-selective-sync'}}">
+        <li ng-class="{'disabled': currentFolder._recvEnc || currentFolder._editing == 'new-ignores'}">
+          <a data-toggle="tab" href="{{currentFolder._recvEnc || currentFolder._editing == 'new-ignores' ? '' : '#folder-selective-sync'}}">
             <span class="fas fa-sliders-h"></span> <span translate>Selective Sync</span>
           </a>
         </li>
+        <li ng-class="{'disabled': currentFolder._recvEnc}"><a data-toggle="tab" href="{{currentFolder._recvEnc ? '' : '#folder-ignores'}}"><span class="fas fa-filter"></span> <span translate>Ignore Patterns</span></a></li>
         <li ng-class="{'disabled': currentFolder._editing == 'new-ignores'}"><a data-toggle="tab" href="{{currentFolder._editing == 'new-ignores' ? '' : '#folder-advanced'}}"><span class="fas fa-cogs"></span> <span translate>Advanced</span></a></li>
       </ul>
       <div class="tab-content">
@@ -172,6 +172,37 @@
           </div>
         </div>
 
+        <div id="folder-selective-sync" class="tab-pane" ng-if="!currentFolder._recvEnc" ng-switch="editingFolderNew()">
+          <div ng-switch-when="true">
+            <label>
+              <input type="checkbox" ng-model="currentFolder._addSelectiveSync">
+              &nbsp;<span translate>Enable selective sync</span>
+            </label>
+            <p class="help-block" translate>
+              When enabled, no files will sync by default. After the folder is added, you can choose which files and folders to keep on this device.
+            </p>
+          </div>
+          <div ng-switch-default>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" ng-model="selectiveSyncEnabled" ng-change="onSelectiveSyncToggle()">
+                &nbsp;<span translate>Enable Selective Sync</span>
+              </label>
+              <p class="help-block" translate>
+                When enabled, no files will sync by default. Use the browser below to choose which files and folders to keep on this device.
+              </p>
+            </div>
+
+            <div ng-if="!selectiveSyncEnabled" class="selective-sync-placeholder">
+              <p class="text-muted" translate>
+                All files will be synced automatically (default behavior). Enable selective sync above to choose which files to download on this device.
+              </p>
+            </div>
+
+            <selective-sync-browser ng-if="selectiveSyncEnabled && currentFolder._editing == 'existing'" folder-id="currentFolder.id"></selective-sync-browser>
+          </div>
+        </div>
+
         <div id="folder-ignores" class="tab-pane" ng-switch="editingFolderNew()">
           <div ng-switch-when="true">
             <label>
@@ -211,27 +242,11 @@
               <hr />
               <span translate translate-value-path="{{currentFolder.path}}{{system.pathSeparator}}.stignore">Editing {%path%}.</span>
             </div>
+            <div ng-if="!editingFolderDefaults()" class="help-block small" style="margin-top: 12px; border-top: 1px solid #555; padding-top: 8px;">
+              <span class="fas fa-info-circle"></span>
+              <span translate>Ignore patterns are the underlying mechanism that powers Selective Sync. When Selective Sync is enabled for this folder, the block between the managed markers is generated automatically — use the </span><a href="#folder-selective-sync" data-toggle="tab" translate>Selective Sync tab</a><span translate> to manage your file selections.</span>
+            </div>
           </div>
-        </div>
-
-        <div id="folder-selective-sync" class="tab-pane" ng-if="currentFolder._editing == 'existing' && !currentFolder._recvEnc">
-          <div class="form-group">
-            <label>
-              <input type="checkbox" ng-model="selectiveSyncEnabled" ng-change="onSelectiveSyncToggle()">
-              &nbsp;<span translate>Enable Selective Sync</span>
-            </label>
-            <p class="help-block" translate>
-              When enabled, no files will sync by default. Use the browser below to choose which files and folders to keep on this device.
-            </p>
-          </div>
-
-          <div ng-if="!selectiveSyncEnabled" class="selective-sync-placeholder">
-            <p class="text-muted" translate>
-              All files will be synced automatically (default behavior). Enable selective sync above to choose which files to download on this device.
-            </p>
-          </div>
-
-          <selective-sync-browser ng-if="selectiveSyncEnabled && currentFolder._editing == 'existing'" folder-id="currentFolder.id"></selective-sync-browser>
         </div>
 
         <div id="folder-advanced" class="tab-pane">

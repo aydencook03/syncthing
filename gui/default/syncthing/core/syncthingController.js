@@ -2718,16 +2718,31 @@ angular.module('syncthing.core')
             }
 
             var newFolderId = $scope.currentFolder.id;
+            var addSelectiveSync = !!$scope.currentFolder._addSelectiveSync;
+            if (addSelectiveSync) {
+                selectiveSyncService.enable(newFolderId);
+            }
             var writeSelectiveSyncAfterCreate = selectiveSyncService.isTouched(newFolderId)
                 && selectiveSyncService.isEnabled(newFolderId);
 
             // No ignores to be set on the new folder, save directly.
             if (!$scope.currentFolder._addIgnores) {
                 $scope.saveConfig().then(function () {
+                    var p = $q.when();
                     if (writeSelectiveSyncAfterCreate) {
-                        selectiveSyncService.saveToIgnores(newFolderId);
+                        p = selectiveSyncService.saveToIgnores(newFolderId);
                     }
-                    hideModal('#editFolder');
+                    p.finally(function () {
+                        if (addSelectiveSync) {
+                            $('#editFolder').one('hidden.bs.modal', function () {
+                                var folderCfg = $scope.folders[newFolderId];
+                                if (folderCfg) {
+                                    $scope.editFolderExisting(folderCfg, '#folder-selective-sync');
+                                }
+                            });
+                        }
+                        hideModal('#editFolder');
+                    });
                 });
                 return;
             }
