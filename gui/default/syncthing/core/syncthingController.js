@@ -2,7 +2,7 @@ angular.module('syncthing.core')
     .config(function ($locationProvider) {
         $locationProvider.html5Mode({ enabled: true, requireBase: false }).hashPrefix('!');
     })
-    .controller('SyncthingController', function ($scope, $http, $location, LocaleService, Events, $filter, $q, $compile, $timeout, $rootScope, $translate) {
+    .controller('SyncthingController', function ($scope, $http, $location, LocaleService, Events, $filter, $q, $compile, $timeout, $rootScope, $translate, selectiveSyncService) {
         'use strict';
 
         // private/helper definitions
@@ -117,6 +117,7 @@ angular.module('syncthing.core')
             defaultLines: [],
             saved: false,
         };
+        $scope.selectiveSyncEnabled = false;
         resetRemoteNeed();
 
         try {
@@ -2376,6 +2377,7 @@ angular.module('syncthing.core')
                     window.location.hash = "";
                     $scope.currentFolder = {};
                     $scope.ignores = {};
+                    $scope.selectiveSyncEnabled = false;
                 });
             });
             showModal('#editFolder');
@@ -2475,7 +2477,31 @@ angular.module('syncthing.core')
             $scope.currentFolder = angular.copy(folderCfg);
             $scope.currentFolder._editing = "existing";
             editFolderLoadIgnores();
+            editFolderLoadSelectiveSync();
             editFolder(initialTab);
+        };
+
+        function editFolderLoadSelectiveSync() {
+            $scope.selectiveSyncEnabled = false;
+            if (!$scope.currentFolder || !$scope.currentFolder.id) {
+                return;
+            }
+            selectiveSyncService.loadFromIgnores($scope.currentFolder.id).then(function () {
+                $scope.selectiveSyncEnabled = selectiveSyncService.isEnabled($scope.currentFolder.id);
+            }, function () {
+                $scope.selectiveSyncEnabled = false;
+            });
+        }
+
+        $scope.onSelectiveSyncToggle = function () {
+            if (!$scope.currentFolder || !$scope.currentFolder.id) {
+                return;
+            }
+            if ($scope.selectiveSyncEnabled) {
+                selectiveSyncService.enable($scope.currentFolder.id);
+            } else {
+                selectiveSyncService.disable($scope.currentFolder.id);
+            }
         };
 
         function editFolderLoadingIgnores() {
@@ -2675,7 +2701,19 @@ angular.module('syncthing.core')
             $scope.config.folders = folderList($scope.folders);
 
             if ($scope.currentFolder._editing == "existing") {
-                saveFolderIgnoresExisting();
+                var ssState = selectiveSyncService.getState($scope.currentFolder.id);
+                var ssLoaded = ssState && ssState.loaded;
+                if (ssLoaded && ($scope.selectiveSyncEnabled || ssState.enabled)) {
+                    // Selective sync owns the ignore file while active; skip the
+                    // textarea-based save to avoid racing with saveToIgnores.
+                    selectiveSyncService.saveToIgnores($scope.currentFolder.id);
+                } else if (ssLoaded) {
+                    // Selective sync was toggled off during this edit; persist the
+                    // cleared state so the managed block is stripped from .stignore.
+                    selectiveSyncService.saveToIgnores($scope.currentFolder.id);
+                } else {
+                    saveFolderIgnoresExisting();
+                }
                 $scope.saveConfig().then(function () {
                     hideModal('#editFolder');
                 });

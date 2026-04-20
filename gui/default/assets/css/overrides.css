@@ -553,3 +553,45 @@ html[lang|="ko"] i {
     -webkit-user-select: all;
     user-select: all;
 }
+
+/* Selective Sync Browser */
+.selective-sync-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.selective-sync-browser .browser-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.selective-sync-browser .browser-toolbar .form-control {
+  flex: 1;
+}
+
+.selective-sync-browser .browser-loading,
+.selective-sync-browser .browser-error {
+  padding: 12px 0;
+  text-align: center;
+}
+
+#selective-sync-tree-container {
+  max-height: 350px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px;
+}
+
+.selective-sync-browser .browser-footer {
+  display: flex;
+  align-items: center;
+  padding-top: 4px;
+}
+
+.selective-sync-placeholder {
+  padding: 20px 0;
+  text-align: center;
+}
