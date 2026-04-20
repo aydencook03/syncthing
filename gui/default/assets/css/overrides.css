@@ -521,11 +521,6 @@ html[lang|="ko"] i {
   text-align: center;
 }
 
-#editFolder .modal-body {
-  max-height: calc(100vh - 200px);
-  overflow-y: hidden;
-}
-
 #selective-sync-tree-container {
   overflow-y: auto;
   resize: vertical;
