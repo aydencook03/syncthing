@@ -1,0 +1,30 @@
+<div class="modal fade" id="fileBrowserModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h4 class="modal-title">{{folderName}} — Files</h4>
+      </div>
+      <div class="modal-body" style="padding: 0;">
+        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; color: #888; font-size: 12px;">
+          <span ng-if="!loading && !error">Showing all files in the cluster. Checked items sync to this device.</span>
+          <span ng-if="loading"><span class="fas fa-spinner fa-spin"></span> Loading...</span>
+          <span ng-if="error" class="text-danger">{{error}} <a href ng-click="load()">Retry</a></span>
+        </div>
+        <div style="overflow-y: auto; max-height: 60vh; padding: 8px;">
+          <div id="file-browser-tree-{{folderId}}" ng-if="!loading && !error"></div>
+          <div ng-if="!loading && empty" style="padding: 20px; text-align: center; color: #888;">
+            No files found. <a href ng-click="load()">Refresh</a>
+          </div>
+        </div>
+        <div ng-if="ambiguous" style="padding: 8px 15px; border-top: 1px solid #ddd; font-size: 12px; color: #888;">
+          Sync state for this item is controlled by pattern: <code>{{ambiguous}}</code> —
+          <a href ng-click="openIgnorePatterns()">edit ignore file</a>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-default" data-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
