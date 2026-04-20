@@ -2715,7 +2715,13 @@ angular.module('syncthing.core')
 
             // No ignores to be set on the new folder, save directly.
             if (!$scope.currentFolder._addIgnores) {
+                var _nfid = $scope.currentFolder.id;
+                var _nfTouched = selectiveSyncService.isTouched(_nfid);
                 $scope.saveConfig().then(function () {
+                    if (_nfTouched) {
+                        return selectiveSyncService.save(_nfid);
+                    }
+                }).then(function () {
                     hideModal('#editFolder');
                 });
                 return;
