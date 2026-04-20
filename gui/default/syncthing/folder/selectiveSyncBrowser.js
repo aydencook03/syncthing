@@ -22,6 +22,14 @@ angular.module('syncthing.core')
                 scope.error = null;
                 scope.filterText = '';
 
+                function browseErrorMessage(err) {
+                    var status = (err && typeof err.status !== 'undefined') ? err.status : 0;
+                    if (status === 500 || status === 503) {
+                        return $translate.instant('File tree not available yet — the folder index may still be syncing. Try refreshing in a moment.');
+                    }
+                    return 'Failed to load file tree (error ' + status + ').';
+                }
+
                 function browseUrl(folderId, prefix) {
                     var url = urlbase + '/db/browse?folder=' + encodeURIComponent(folderId) + '&levels=1';
                     if (prefix) {
@@ -71,7 +79,7 @@ angular.module('syncthing.core')
                             });
                         }, function (err) {
                             scope.loading = false;
-                            scope.error = $translate.instant('Failed to load file tree.') + ' ' + (err.statusText || '');
+                            scope.error = browseErrorMessage(err);
                         });
                     }, function (err) {
                         scope.loading = false;
@@ -121,6 +129,11 @@ angular.module('syncthing.core')
                             }).then(function (items) {
                                 cache[path] = items || [];
                                 return toFancyNodes(items || [], path);
+                            }, function (jqXHR) {
+                                scope.$apply(function () {
+                                    scope.error = browseErrorMessage({ status: jqXHR && jqXHR.status });
+                                });
+                                return $.Deferred().reject(jqXHR).promise();
                             });
                         },
                         init: function (event, data) {

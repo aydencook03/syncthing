@@ -214,7 +214,7 @@
           </div>
         </div>
 
-        <div id="folder-selective-sync" class="tab-pane" ng-if="!currentFolder._recvEnc">
+        <div id="folder-selective-sync" class="tab-pane" ng-if="currentFolder._editing != 'new-ignores' && !currentFolder._recvEnc">
           <div class="form-group">
             <label>
               <input type="checkbox" ng-model="selectiveSyncEnabled" ng-change="onSelectiveSyncToggle()">
