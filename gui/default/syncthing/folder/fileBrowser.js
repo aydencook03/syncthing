@@ -100,7 +100,7 @@ angular.module('syncthing.core')
                     $(el).fancytree({
                         extensions: ['glyph'],
                         checkbox: true,
-                        selectMode: 1,          // independent checkboxes — state comes from db/file per node
+                        selectMode: 2,          // independent checkboxes — state comes from db/file per node
                         clickFolderMode: 4,     // click title → expand; click checkbox → select
                         autoActivate: false,
                         escapeTitles: false,    // titles contain safe HTML (size badge)
