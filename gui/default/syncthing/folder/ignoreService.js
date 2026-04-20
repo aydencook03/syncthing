@@ -18,7 +18,7 @@ angular.module('syncthing.core')
         // surfaced to the user as-is.
         function isLiteral(pattern) {
             var p = (pattern[0] === '!') ? pattern.slice(1) : pattern;
-            return p[0] !== '#' && !/[*?\[{]/.test(p);
+            return p[0] !== '#' && !/[*?\\[{]/.test(p);
         }
 
         // Normalise a path to always have a leading slash.
@@ -33,6 +33,25 @@ angular.module('syncthing.core')
             return (p[0] === '/') ? p : '/' + p;
         }
 
+        // Returns the parent directory of a normalised path (with leading slash).
+        // '/photos/vacation.jpg' → '/photos'
+        // '/photos'             → '/'
+        function parentDir(path) {
+            var idx = path.lastIndexOf('/');
+            return (idx === 0) ? '/' : path.slice(0, idx);
+        }
+
+        // The catch-all wildcard pattern that directly covers a given path.
+        // This is the pattern whose presence means "everything in path's parent dir
+        // is ignored by default".
+        //   '/vacation.jpg'         → '*'
+        //   '/photos/vacation.jpg'  → 'photos/*'
+        //   '/photos/2024/img.jpg'  → 'photos/2024/*'
+        function catchAllFor(path) {
+            var parent = parentDir(path);
+            return (parent === '/') ? '*' : parent.slice(1) + '/*';
+        }
+
         function getPatterns(folderId) {
             return $http.get(urlbase + '/db/ignores?folder=' + encodeURIComponent(folderId))
                 .then(function (r) { return (r.data && r.data.ignore) || []; });
@@ -45,7 +64,77 @@ angular.module('syncthing.core')
             );
         }
 
-        // Toggle sync for a path.
+        // Is selective sync enabled for a directory?
+        // i.e. does `path/*` (without leading slash) exist in patterns?
+        // Resolves to true/false.
+        function hasDirSelectiveSync(folderId, path) {
+            path = norm(path);
+            var catchAll = catchAllFor(path + '/x'); // catch-all for direct children
+            return getPatterns(folderId).then(function (patterns) {
+                return patterns.indexOf(catchAll) !== -1;
+            });
+        }
+
+        // Toggle selective sync for a directory.
+        //
+        // enableSS=true:  add `path/*`, and if parent has a catch-all, add `!path`
+        //                 before it so the directory itself is traversable.
+        // enableSS=false: remove `path/*`; if parent has a catch-all, keep/add `!path`
+        //                 so directory remains accessible; if parent has no catch-all,
+        //                 remove any stale `!path` entry.
+        //
+        // Resolves to { ok: true } or { ok: false, ambiguous: '<pattern>' }.
+        function toggleDirSelectiveSync(folderId, path, enableSS) {
+            path = norm(path);
+            var dirCatchAll   = catchAllFor(path + '/x'); // e.g. 'photos/*'
+            var parentCatchAll = catchAllFor(path);        // e.g. '*' or 'parent/*'
+            var whitelist     = '!' + path;               // e.g. '!/photos'
+
+            return getPatterns(folderId).then(function (patterns) {
+                var updated = patterns.slice();
+                var dirIdx, whiteIdx, parentIdx;
+
+                // Find relevant indices.
+                dirIdx    = updated.indexOf(dirCatchAll);
+                whiteIdx  = updated.indexOf(whitelist);
+                parentIdx = updated.indexOf(parentCatchAll);
+
+                if (enableSS) {
+                    // Add path/* if not already present.
+                    if (dirIdx === -1) {
+                        updated.push(dirCatchAll);
+                    }
+                    // If parent has a catch-all, ensure !path whitelist exists before it
+                    // so the directory itself is traversable.
+                    if (parentIdx !== -1 && whiteIdx === -1) {
+                        updated.splice(parentIdx, 0, whitelist);
+                    }
+                } else {
+                    // Remove path/*.
+                    if (dirIdx !== -1) {
+                        updated.splice(dirIdx, 1);
+                    }
+                    // Re-read parentIdx after potential splice.
+                    parentIdx = updated.indexOf(parentCatchAll);
+
+                    if (parentIdx !== -1) {
+                        // Parent has catch-all: ensure !path whitelist exists so directory
+                        // remains visible/synced.
+                        if (updated.indexOf(whitelist) === -1) {
+                            updated.splice(parentIdx, 0, whitelist);
+                        }
+                    } else {
+                        // Parent has no catch-all: remove stale !path if present.
+                        var wi = updated.indexOf(whitelist);
+                        if (wi !== -1) { updated.splice(wi, 1); }
+                    }
+                }
+
+                return setPatterns(folderId, updated).then(ok);
+            });
+        }
+
+        // Toggle sync for a file path.
         //
         // currentlyIgnored: from db/file response → local.ignored
         //
@@ -73,8 +162,9 @@ angular.module('syncthing.core')
                         return setPatterns(folderId, updated).then(ok);
                     }
 
-                    // 2. Catch-all '*' exists → insert whitelist entry before it.
-                    idx = patterns.indexOf('*');
+                    // 2. Direct-parent catch-all exists → insert whitelist entry before it.
+                    var ca = catchAllFor(path);
+                    idx = patterns.indexOf(ca);
                     if (idx !== -1) {
                         updated = patterns.slice();
                         updated.splice(idx, 0, '!' + path);
@@ -123,7 +213,7 @@ angular.module('syncthing.core')
         // path — so we can show it to the user in the ambiguity notice.
         function findCulprit(patterns) {
             for (var i = 0; i < patterns.length; i++) {
-                if (!isLiteral(patterns[i]) && patterns[i] !== '*') {
+                if (!isLiteral(patterns[i])) {
                     return patterns[i];
                 }
             }
@@ -131,8 +221,10 @@ angular.module('syncthing.core')
         }
 
         return {
-            getPatterns: getPatterns,
-            setPatterns: setPatterns,
-            togglePath: togglePath
+            getPatterns:           getPatterns,
+            setPatterns:           setPatterns,
+            hasDirSelectiveSync:   hasDirSelectiveSync,
+            toggleDirSelectiveSync: toggleDirSelectiveSync,
+            togglePath:            togglePath
         };
     }]);
