@@ -12,9 +12,12 @@
     <div class="browser-error text-muted" ng-if="!loading && error" style="padding: 10px; text-align: center;">
       {{error}} <a href ng-click="refresh()">Refresh?</a>
     </div>
-    <div id="selective-sync-tree-{{folderId}}" ng-if="!loading && !error"></div>
+    <div ng-if="!loading && !error && empty" style="padding: 20px; text-align: center; color: #888;">
+      No files found. The folder index may still be building. <a href ng-click="refresh()">Refresh?</a>
+    </div>
+    <div id="selective-sync-tree-{{folderId}}" ng-if="!loading && !error && !empty"></div>
   </div>
-  <div class="browser-footer" ng-if="!loading && !error">
+  <div class="browser-footer" ng-if="!loading && !error && !empty">
     <small class="text-muted">
       <span>{{selectedCount()}} item(s) selected</span>
     </small>

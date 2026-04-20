@@ -20,6 +20,7 @@ angular.module('syncthing.core')
 
                 scope.loading = true;
                 scope.error = null;
+                scope.empty = false;
                 scope.filterText = '';
 
                 function browseErrorMessage(err) {
@@ -74,11 +75,19 @@ angular.module('syncthing.core')
                 function loadRoot() {
                     scope.loading = true;
                     scope.error = null;
+                    scope.empty = false;
 
                     return selectiveSyncService.loadFromIgnores(scope.folderId).then(function () {
                         return $http.get(browseUrl(scope.folderId)).then(function (response) {
-                            cache[''] = response.data || [];
-                            var rootNodes = toFancyNodes(response.data || [], '');
+                            var items = response.data || [];
+                            cache[''] = items;
+                            if (items.length === 0) {
+                                scope.loading = false;
+                                scope.empty = true;
+                                return;
+                            }
+                            scope.empty = false;
+                            var rootNodes = toFancyNodes(items, '');
                             scope.loading = false;
                             // If a tree already exists (e.g. the user reopened
                             // the modal), reload its contents in place rather
