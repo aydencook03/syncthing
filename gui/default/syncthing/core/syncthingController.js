@@ -2644,22 +2644,36 @@ angular.module('syncthing.core')
             }
 
             $scope.validateXattrFilter();
+            // Defensive: the in-place new→existing modal transition can re-enter
+            // saveFolder after $scope.currentSharing / folderCfg._guiVersioning
+            // were wiped on the first pass. Re-initialize them rather than
+            // crashing if they're missing.
+            if (!$scope.currentSharing) {
+                initShareEditing('folder');
+            }
+            if (!$scope.currentFolder._guiVersioning) {
+                initVersioningEditing();
+            }
             var folderCfg = angular.copy($scope.currentFolder);
-            $scope.currentSharing.selected[$scope.myID] = true;
+            if ($scope.currentSharing && $scope.currentSharing.selected) {
+                $scope.currentSharing.selected[$scope.myID] = true;
+            }
             var newDevices = [];
             folderCfg.devices.forEach(function (dev) {
-                if ($scope.currentSharing.selected[dev.deviceID] === true) {
-                    dev.encryptionPassword = $scope.currentSharing.encryptionPasswords[dev.deviceID];
+                if ($scope.currentSharing && $scope.currentSharing.selected && $scope.currentSharing.selected[dev.deviceID] === true) {
+                    dev.encryptionPassword = $scope.currentSharing.encryptionPasswords ? $scope.currentSharing.encryptionPasswords[dev.deviceID] : undefined;
                     newDevices.push(dev);
                     delete $scope.currentSharing.selected[dev.deviceID];
                 };
             });
-            for (var deviceID in $scope.currentSharing.selected) {
-                if ($scope.currentSharing.selected[deviceID] === true) {
-                    newDevices.push({
-                        deviceID: deviceID,
-                        encryptionPassword: $scope.currentSharing.encryptionPasswords[deviceID],
-                    });
+            if ($scope.currentSharing && $scope.currentSharing.selected) {
+                for (var deviceID in $scope.currentSharing.selected) {
+                    if ($scope.currentSharing.selected[deviceID] === true) {
+                        newDevices.push({
+                            deviceID: deviceID,
+                            encryptionPassword: $scope.currentSharing.encryptionPasswords ? $scope.currentSharing.encryptionPasswords[deviceID] : undefined,
+                        });
+                    }
                 }
             }
             folderCfg.devices = newDevices;
@@ -2668,26 +2682,28 @@ angular.module('syncthing.core')
             if (!folderCfg.versioning) {
                 folderCfg.versioning = {params: {}};
             }
-            folderCfg.versioning.type = folderCfg._guiVersioning.selector;
-            if ($scope.internalVersioningEnabled()) {
-                folderCfg.versioning.cleanupIntervalS = folderCfg._guiVersioning.cleanupIntervalS;
-            }
-            switch (folderCfg._guiVersioning.selector) {
-            case "trashcan":
-                folderCfg.versioning.params.cleanoutDays = '' + folderCfg._guiVersioning.trashcanClean;
-                break;
-            case "simple":
-                folderCfg.versioning.params.keep = '' + folderCfg._guiVersioning.simpleKeep,
-                folderCfg.versioning.params.cleanoutDays = '' + folderCfg._guiVersioning.trashcanClean;
-                break;
-            case "staggered":
-                folderCfg.versioning.params.maxAge = '' + (folderCfg._guiVersioning.staggeredMaxAge * 86400);
-                break;
-            case "external":
-                folderCfg.versioning.params.command = '' + folderCfg._guiVersioning.externalCommand;
-                break;
-            default:
-                folderCfg.versioning = {type: ''};
+            if (folderCfg._guiVersioning) {
+                folderCfg.versioning.type = folderCfg._guiVersioning.selector;
+                if ($scope.internalVersioningEnabled()) {
+                    folderCfg.versioning.cleanupIntervalS = folderCfg._guiVersioning.cleanupIntervalS;
+                }
+                switch (folderCfg._guiVersioning.selector) {
+                case "trashcan":
+                    folderCfg.versioning.params.cleanoutDays = '' + folderCfg._guiVersioning.trashcanClean;
+                    break;
+                case "simple":
+                    folderCfg.versioning.params.keep = '' + folderCfg._guiVersioning.simpleKeep,
+                    folderCfg.versioning.params.cleanoutDays = '' + folderCfg._guiVersioning.trashcanClean;
+                    break;
+                case "staggered":
+                    folderCfg.versioning.params.maxAge = '' + (folderCfg._guiVersioning.staggeredMaxAge * 86400);
+                    break;
+                case "external":
+                    folderCfg.versioning.params.command = '' + folderCfg._guiVersioning.externalCommand;
+                    break;
+                default:
+                    folderCfg.versioning = {type: ''};
+                }
             }
             delete folderCfg._guiVersioning;
 
@@ -2761,6 +2777,11 @@ angular.module('syncthing.core')
                                 // and a subsequent Save from the selective-sync
                                 // tab would otherwise crash on currentSharing.selected.
                                 initShareEditing('folder');
+                                // Re-initialize versioning editing state; the
+                                // earlier saveFolder pass deleted
+                                // folderCfg._guiVersioning, and a subsequent Save
+                                // would crash on _guiVersioning.selector.
+                                initVersioningEditing();
                                 editFolderLoadIgnores();
                                 editFolderLoadSelectiveSync();
                                 $timeout(function () {

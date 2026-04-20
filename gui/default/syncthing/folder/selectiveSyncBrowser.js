@@ -316,29 +316,23 @@ angular.module('syncthing.core')
                     }
                 });
 
-                // Parent controller broadcasts this when the Selective Sync tab
-                // becomes visible (either by tab click or by the in-place
-                // transition from the new-folder flow). Belt-and-suspenders
-                // alongside the initial $timeout below: covers the case where
-                // the tab pane was hidden (zero-size) when the directive first
-                // linked and FancyTree couldn't measure its container.
-                scope.$on('selectiveSyncTabVisible', function (event, args) {
-                    if (!args || args.folderId !== scope.folderId) {
+                // Watch folderId so that when the directive is (re)instantiated
+                // and the binding resolves, or the bound folder changes, we
+                // (re)load the tree. More reliable than event broadcasts: ng-if
+                // inserts the DOM element, but jQuery/FancyTree needs the
+                // element to have layout dimensions before it can initialize.
+                // A 300ms delay gives AngularJS and the browser time to do a
+                // layout pass after ng-if flips.
+                scope.$watch('folderId', function (newVal, oldVal) {
+                    if (!newVal) {
                         return;
                     }
-                    var empty = !tree || !tree.getRootNode().hasChildren();
-                    if (empty) {
-                        loadRoot();
-                    }
+                    $timeout(function () {
+                        if (!tree || !tree.getRootNode().hasChildren()) {
+                            loadRoot();
+                        }
+                    }, 300);
                 });
-
-                // Kick off initial load when the directive is placed in the DOM.
-                // Defer with a zero-delay $timeout so the directive's folderId
-                // binding and the ng-if wrapper's DOM have settled after the
-                // current digest before FancyTree looks for its container.
-                $timeout(function () {
-                    loadRoot();
-                }, 0);
             }
         };
     }]);
