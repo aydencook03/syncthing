@@ -2724,23 +2724,33 @@ angular.module('syncthing.core')
             $scope.config.folders = folderList($scope.folders);
 
             if ($scope.currentFolder._editing == "existing") {
-                // Selective sync owns the ignore file when the user has
-                // touched the tab during this edit (toggled on or off), or
-                // when a managed block already exists in the loaded ignore
-                // file. Otherwise the plain textarea save runs unchanged.
                 try {
-                    if (selectiveSyncService.isTouched($scope.currentFolder.id)
-                        || selectiveSyncService.isEnabled($scope.currentFolder.id)) {
-                        var folderId = $scope.currentFolder.id;
-                        // Sync textarea content back into the service's
-                        // userLines before saving. Otherwise any edits the
-                        // user made in the Ignore Patterns textarea are
-                        // overwritten when the managed block is re-serialized.
-                        var currentLines = $scope.ignores.text ? $scope.ignores.text.split('\n') : [];
-                        selectiveSyncService.setUserLines(folderId, currentLines);
-                        console.log('[selective-sync] saveToIgnores called for', folderId);
-                        console.log('[selective-sync] selectedPaths', selectiveSyncService.getSelectedPaths(folderId));
-                        selectiveSyncService.saveToIgnores(folderId);
+                    var folderId = $scope.currentFolder.id;
+                    var touched = selectiveSyncService.isTouched(folderId);
+                    var enabled = selectiveSyncService.isEnabled(folderId);
+
+                    if (touched || enabled) {
+                        var ignoresText = $scope.ignores.text;
+                        var hasValidText = ignoresText && ignoresText !== 'Loading...';
+
+                        if (!enabled && touched) {
+                            // User disabled selective sync: reload current .stignore to
+                            // get accurate userLines (managed block stripped), then save.
+                            // Don't trust $scope.ignores.text — it may never have loaded.
+                            selectiveSyncService.loadFromIgnores(folderId).then(function () {
+                                selectiveSyncService.saveToIgnores(folderId);
+                            });
+                        } else {
+                            // Selective sync is enabled (or was just toggled on).
+                            // Sync textarea content back into userLines if valid.
+                            if (hasValidText) {
+                                var currentLines = ignoresText.split('\n');
+                                selectiveSyncService.setUserLines(folderId, currentLines);
+                            }
+                            console.log('[selective-sync] saveToIgnores called for', folderId);
+                            console.log('[selective-sync] selectedPaths', selectiveSyncService.getSelectedPaths(folderId));
+                            selectiveSyncService.saveToIgnores(folderId);
+                        }
                     } else {
                         saveFolderIgnoresExisting();
                     }
