@@ -49,6 +49,7 @@ angular.module('syncthing.core')
                             var items = r.data || [];
                             cache[''] = items;
                             if (items.length === 0) { scope.empty = true; return; }
+                            // Defer mountTree one tick so ng-if has time to render the container div.
                             $timeout(function () { mountTree(toNodes(items, '')); });
                         }, function (err) {
                             scope.loading = false;
@@ -56,63 +57,66 @@ angular.module('syncthing.core')
                         });
                 };
 
-                // Convert db/browse items to FancyTree node defs.
-                // Checkbox state is unknown until db/file is fetched; start unchecked.
-                // Status is loaded lazily per node on expand/render.
+                // Convert db/browse items to FancyTree node definitions.
+                // Checkbox state starts false; real state loaded async via db/file.
                 function toNodes(items, parentPath) {
                     return items.map(function (item) {
-                        var path = (parentPath ? parentPath : '') + '/' + item.name;
+                        var path = parentPath + '/' + item.name;
                         var isDir = item.type === 'FILE_INFO_TYPE_DIRECTORY';
                         return {
-                            title: nodeTitle(item),
+                            title: nodeTitle(item.name, item.size),
                             key: path,
                             folder: isDir,
                             lazy: isDir,
-                            selected: false,   // resolved async via loadNodeStatus
+                            selected: false,
                             checkbox: true,
-                            data: { path: path, item: item, statusLoaded: false }
+                            data: { statusLoaded: false }
                         };
                     });
                 }
 
-                function nodeTitle(item) {
-                    var size = item.size ? ' <small class="text-muted">(' + humanSize(item.size) + ')</small>' : '';
-                    return '<span>' + escHtml(item.name) + size + '</span>';
+                function nodeTitle(name, size) {
+                    var s = size ? ' <small class="text-muted">(' + humanSize(size) + ')</small>' : '';
+                    return '<span>' + escHtml(name) + s + '</span>';
                 }
 
                 function mountTree(nodes) {
                     var el = document.getElementById('file-browser-tree-' + scope.folderId);
                     if (!el) return;
-                    var $el = $(el);
 
-                    $el.fancytree({
+                    $(el).fancytree({
                         extensions: ['glyph'],
                         checkbox: true,
-                        selectMode: 2,          // hierarchical (parent controls children)
+                        selectMode: 1,          // independent checkboxes — state comes from db/file per node
                         clickFolderMode: 4,     // click title → expand; click checkbox → select
                         autoActivate: false,
+                        escapeTitles: false,    // titles contain safe HTML (size badge)
                         glyph: { preset: 'awesome5' },
                         source: nodes,
 
                         // Lazy-load children when a folder is expanded.
+                        // FancyTree requires data.result to be an array or jQuery Deferred — not an Angular promise.
                         lazyLoad: function (event, data) {
                             var path = data.node.key;
                             if (cache[path]) {
                                 data.result = toNodes(cache[path], path);
-                                loadStatusForNodes(data.result.map(function(n) { return data.node.tree.getNodeByKey(n.key); }));
                                 return;
                             }
+                            var def = $.Deferred();
                             var stripped = path.replace(/^\/+/, '');
-                            data.result = $http.get(
+                            $http.get(
                                 urlbase + '/db/browse?folder=' + encodeURIComponent(scope.folderId) +
                                 '&levels=1&prefix=' + encodeURIComponent(stripped)
                             ).then(function (r) {
                                 cache[path] = r.data || [];
-                                return toNodes(cache[path], path);
+                                def.resolve(toNodes(cache[path], path));
+                            }, function () {
+                                def.reject();
                             });
+                            data.result = def.promise();
                         },
 
-                        // After children load, fetch their ignore status.
+                        // After children are inserted into the tree, fetch their ignore status.
                         loadChildren: function (event, data) {
                             loadStatusForNodes(data.node.children || []);
                         },
@@ -120,29 +124,27 @@ angular.module('syncthing.core')
                         // User toggled a checkbox.
                         select: function (event, data) {
                             var node = data.node;
-                            var path = node.key;
-                            // node.selected reflects the NEW state after the click.
-                            // If now selected → it was ignored before → user wants to START syncing.
-                            // If now deselected → it was syncing before → user wants to STOP syncing.
+                            // node.selected is the NEW state after the click.
+                            // selected=true  → was ignored → user wants to START syncing (wasIgnored=true)
+                            // selected=false → was syncing → user wants to STOP  syncing (wasIgnored=false)
                             var wasIgnored = node.selected;
                             scope.ambiguous = null;
 
-                            ignoreService.togglePath(scope.folderId, path, wasIgnored)
+                            ignoreService.togglePath(scope.folderId, node.key, wasIgnored)
                                 .then(function (result) {
                                     if (!result.ok) {
-                                        // Revert the checkbox to its prior state and show the ambiguity notice.
+                                        // Revert to prior state and surface the ambiguity notice.
                                         node.setSelected(!wasIgnored, { noEvents: true });
                                         scope.$apply(function () { scope.ambiguous = result.ambiguous; });
-                                    }
-                                    // On success Syncthing will re-evaluate ignores automatically;
-                                    // refresh this node's status after a short delay.
-                                    else {
+                                    } else {
+                                        // Syncthing re-evaluates ignores automatically after a write;
+                                        // refresh this node's real status after a short settle delay.
                                         $timeout(function () { refreshNodeStatus(node); }, 800);
                                     }
                                 });
                         },
 
-                        // Click on title → expand/collapse folder.
+                        // Click on folder title → expand/collapse.
                         click: function (event, data) {
                             if (data.targetType === 'title' && data.node.isFolder()) {
                                 data.node.toggleExpanded();
@@ -152,15 +154,12 @@ angular.module('syncthing.core')
                     });
 
                     tree = $.ui.fancytree.getTree(el);
-
-                    // Load ignore status for the root nodes.
                     loadStatusForNodes(tree.getRootNode().children || []);
                 }
 
-                // Fetch db/file for a batch of nodes and set their checkbox state.
                 function loadStatusForNodes(nodes) {
                     (nodes || []).forEach(function (node) {
-                        if (!node || !node.data || node.data.statusLoaded) return;
+                        if (!node || node.data.statusLoaded) return;
                         refreshNodeStatus(node);
                     });
                 }
@@ -176,27 +175,25 @@ angular.module('syncthing.core')
                         node.setSelected(!ignored, { noEvents: true });
                         node.data.statusLoaded = true;
                     }, function () {
-                        // File not in local index yet — leave unchecked.
+                        // Not in local index yet — leave unchecked.
                         node.data.statusLoaded = true;
                     });
                 }
 
                 scope.openIgnorePatterns = function () {
                     $('#fileBrowserModal').modal('hide');
-                    // Let the controller know to open the edit modal on the Ignore Patterns tab.
                     scope.$emit('openIgnorePatternsFor', { folderId: scope.folderId });
                 };
 
-                // Utilities
                 function humanSize(bytes) {
-                    if (bytes === 0) return '0 B';
+                    if (!bytes) return '0 B';
                     var units = ['B', 'KB', 'MB', 'GB', 'TB'];
                     var i = Math.floor(Math.log(bytes) / Math.log(1024));
                     return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
                 }
 
                 function escHtml(s) {
-                    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 }
             }
         };
