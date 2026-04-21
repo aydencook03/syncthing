@@ -2471,6 +2471,10 @@ angular.module('syncthing.core')
             }
         };
 
+        $scope.openFileBrowser = function (folder) {
+            $scope.$broadcast('openFileBrowser', { folderId: folder.id, folderName: folder.label || folder.id });
+        };
+
         $scope.editFolderExisting = function (folderCfg, initialTab) {
             $scope.currentFolder = angular.copy(folderCfg);
             $scope.currentFolder._editing = "existing";

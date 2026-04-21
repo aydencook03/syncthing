@@ -638,6 +638,9 @@
                       <button type="button" class="btn btn-sm btn-default" ng-click="rescanFolder(folder.id)" ng-disabled="['idle', 'stopped', 'unshared', 'outofsync', 'faileditems', 'localadditions'].indexOf(folderStatus(folder)) < 0">
                         <span class="fas fa-refresh"></span>&nbsp;<span translate>Rescan</span>
                       </button>
+                      <button type="button" class="btn btn-sm btn-default" ng-click="openFileBrowser(folder)">
+                        <span class="fas fa-folder-open"></span>&nbsp;<span translate>Browse</span>
+                      </button>
                       <button type="button" class="btn btn-sm btn-default" ng-click="editFolderExisting(folder)">
                         <span class="fas fa-pencil-alt"></span>&nbsp;<span translate>Edit</span>
                       </button>
@@ -1075,6 +1078,8 @@
   <script type="text/javascript" src="syncthing/core/pathIsSubDirDirective.js"></script>
   <script type="text/javascript" src="syncthing/core/popoverDirective.js"></script>
   <script type="text/javascript" src="syncthing/core/syncthingController.js"></script>
+  <script type="text/javascript" src="syncthing/folder/ignoreService.js"></script>
+  <script type="text/javascript" src="syncthing/folder/fileBrowser.js"></script>
   <script type="text/javascript" src="syncthing/core/tooltipDirective.js"></script>
   <script type="text/javascript" src="syncthing/core/uncamelFilter.js"></script>
   <script type="text/javascript" src="syncthing/core/uniqueFolderDirective.js"></script>
@@ -1085,5 +1090,6 @@
   <script type="text/javascript" src="syncthing/app.js"></script>
   <!-- / gui application code -->
 
+  <file-browser></file-browser>
 </body>
 </html>
