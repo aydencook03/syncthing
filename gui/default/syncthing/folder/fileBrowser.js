@@ -200,6 +200,10 @@ angular.module('syncthing.core')
                                                 refreshNodeStatus(child);
                                             });
                                         }
+                                        // Re-read root SS state — any write may have added/removed *.
+                                        ignoreService.hasDirSelectiveSync(scope.folderId, '/').then(function (hasSS) {
+                                            scope.syncAllByDefault = !hasSS;
+                                        });
                                     }, 800);
                                     pendingTimeouts.push(h);
                                 }
