@@ -260,14 +260,17 @@ angular.module('syncthing.core')
             });
         }
 
-        // Toggle sync for a file. Resolves to { ok: true } or { ok: false, ambiguous }.
-        function togglePath(folderId, path, currentlyIgnored) {
+        // Toggle sync for a file. `nowSelected` is the new checkbox state:
+        // true = user just checked it (file was ignored, start syncing).
+        // false = user just unchecked it (file was syncing, stop syncing).
+        // Resolves to { ok: true } or { ok: false, ambiguous }.
+        function togglePath(folderId, path, nowSelected) {
             path = norm(path);
             return getPatterns(folderId).then(function (patterns) {
                 var i, p, idx, updated;
 
-                if (currentlyIgnored) {
-                    // ✗→✓  start syncing.
+                if (nowSelected) {
+                    // ✗→✓  start syncing (file was ignored, user checked it).
                     // 1. Literal ignore entry → remove it.
                     for (i = 0; i < patterns.length; i++) {
                         p = patterns[i];
@@ -288,7 +291,7 @@ angular.module('syncthing.core')
                     return { ok: false, ambiguous: findCulprit(patterns) };
 
                 } else {
-                    // ✓→✗  stop syncing.
+                    // ✓→✗  stop syncing (file was syncing, user unchecked it).
                     // 1. !/file whitelist → remove it (re-exposes to parent catch-all).
                     for (i = 0; i < patterns.length; i++) {
                         p = patterns[i];
