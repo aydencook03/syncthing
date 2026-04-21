@@ -128,22 +128,15 @@ angular.module('syncthing.core')
             var dir = parentDir(norm(path));
             while (true) {
                 var ca = catchAllIn(dir);
-                if (updated.indexOf(ca) !== -1) {
-                    // This ancestor already has SS — stop.
-                    break;
-                }
-                // Enable SS for this dir.
+                if (updated.indexOf(ca) !== -1) { break; } // ancestor already has SS — stop
                 updated.push(ca);
-                // If dir is not root, check whether its parent has a catch-all.
-                // If so, insert !/dir before that catch-all so the dir stays traversable.
-                if (dir !== '/') {
-                    var parentCa = catchAllIn(parentDir(dir));
-                    var parentIdx = updated.indexOf(parentCa);
-                    if (parentIdx !== -1 && updated.indexOf('!' + dir) === -1) {
-                        updated.splice(parentIdx, 0, '!' + dir);
-                    }
+                if (dir === '/') { break; } // just processed root — done
+                // Insert !/dir before the parent catch-all so this dir stays traversable.
+                var parentCa = catchAllIn(parentDir(dir));
+                var parentIdx = updated.indexOf(parentCa);
+                if (parentIdx !== -1 && updated.indexOf('!' + dir) === -1) {
+                    updated.splice(parentIdx, 0, '!' + dir);
                 }
-                if (dir === '/') { break; } // just processed root, done
                 dir = parentDir(dir);
             }
         }
