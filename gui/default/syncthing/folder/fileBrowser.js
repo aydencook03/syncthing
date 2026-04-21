@@ -22,17 +22,39 @@ angular.module('syncthing.core')
                 var cache = {};
                 var pendingTimeouts = [];
 
-                scope.folderId   = null;
-                scope.folderName = null;
-                scope.loading    = false;
-                scope.error      = null;
-                scope.empty      = false;
-                scope.ambiguous  = null;
+                scope.folderId        = null;
+                scope.folderName      = null;
+                scope.loading         = false;
+                scope.error           = null;
+                scope.empty           = false;
+                scope.ambiguous       = null;
                 scope.syncAllByDefault = false;
 
                 function cancelPendingTimeouts() {
                     pendingTimeouts.forEach(function (h) { $timeout.cancel(h); });
                     pendingTimeouts = [];
+                }
+
+                function refreshRootSBD() {
+                    ignoreService.dirSyncsAllByDefault(scope.folderId, '/').then(function (sbd) {
+                        scope.syncAllByDefault = sbd;
+                    });
+                }
+
+                // After any write, refresh status for a node (and its rendered descendants
+                // if it's a directory), then re-read the root SBD state.
+                function refreshAfterWrite(node) {
+                    var h = $timeout(function () {
+                        refreshNodeStatus(node);
+                        if (node.folder) {
+                            node.visit(function (child) {
+                                child.data.statusLoaded = false;
+                                refreshNodeStatus(child);
+                            });
+                        }
+                        refreshRootSBD();
+                    }, 0);
+                    pendingTimeouts.push(h);
                 }
 
                 // Listen for open requests from anywhere in the app.
@@ -52,28 +74,24 @@ angular.module('syncthing.core')
                     if (tree) { try { tree.destroy(); } catch(e) {} tree = null; }
                 });
 
-                scope.toggleRootCatchAll = function () {
-                    // Flip the model ourselves (no ng-model — avoids ng-if child scope shadowing).
-                    // intended = post-flip state; addCatchAll is opposite (checked = everything syncs = no catch-all).
+                // Toggle SBD for the root directory.
+                scope.toggleRootSBD = function () {
+                    // Flip ourselves (no ng-model — avoids ng-if child scope shadowing).
                     scope.syncAllByDefault = !scope.syncAllByDefault;
                     var intended = scope.syncAllByDefault;
-                    var addCatchAll = !intended;
-                    ignoreService.toggleDirCatchAll(scope.folderId, '/', addCatchAll)
+                    ignoreService.setDirSBD(scope.folderId, '/', intended)
                         .then(function (result) {
                             if (!result.ok) {
-                                scope.syncAllByDefault = !intended;
+                                scope.syncAllByDefault = !intended; // revert
                             } else {
-                                // Refresh all rendered nodes — root catch-all change
-                                // affects every directory's effective state.
+                                // Refresh all rendered nodes — root SBD change affects every dir.
                                 var h = $timeout(function () {
                                     if (!tree) return;
                                     tree.getRootNode().visit(function (child) {
                                         child.data.statusLoaded = false;
                                         refreshNodeStatus(child);
                                     });
-                                    ignoreService.dirSyncsAllByDefault(scope.folderId, '/').then(function (syncsAll) {
-                                        scope.syncAllByDefault = syncsAll;
-                                    });
+                                    refreshRootSBD();
                                 }, 0);
                                 pendingTimeouts.push(h);
                             }
@@ -84,18 +102,14 @@ angular.module('syncthing.core')
                     scope.loading = true;
                     scope.error   = null;
                     scope.empty   = false;
-
-                    ignoreService.dirSyncsAllByDefault(scope.folderId, '/').then(function (syncsAll) {
-                        scope.syncAllByDefault = syncsAll;
-                    });
-
+                    refreshRootSBD();
                     $http.get(urlbase + '/db/browse?folder=' + encodeURIComponent(scope.folderId) + '&levels=1')
                         .then(function (r) {
                             scope.loading = false;
                             var items = r.data || [];
                             cache[''] = items;
                             if (items.length === 0) { scope.empty = true; return; }
-                            // Defer mountTree one tick so ng-if has time to render the container div.
+                            // Defer one tick so ng-if has time to render the container div.
                             $timeout(function () { mountTree(toNodes(items, '')); });
                         }, function (err) {
                             scope.loading = false;
@@ -103,20 +117,18 @@ angular.module('syncthing.core')
                         });
                 };
 
-                // Convert db/browse items to FancyTree node definitions.
-                // Checkbox state starts false; real state loaded async via ignoreService.
                 function toNodes(items, parentPath) {
                     return items.map(function (item) {
-                        var path = parentPath + '/' + item.name;
+                        var path  = parentPath + '/' + item.name;
                         var isDir = item.type === 'FILE_INFO_TYPE_DIRECTORY';
                         return {
-                            title: nodeTitle(item.name, item.size),
-                            key: path,
-                            folder: isDir,
-                            lazy: isDir,
+                            title:    nodeTitle(item.name, item.size),
+                            key:      path,
+                            folder:   isDir,
+                            lazy:     isDir,
                             selected: false,
                             checkbox: true,
-                            data: { statusLoaded: false }
+                            data:     { statusLoaded: false }
                         };
                     });
                 }
@@ -141,14 +153,11 @@ angular.module('syncthing.core')
                         source: nodes,
 
                         // Lazy-load children when a folder is expanded.
-                        // FancyTree requires data.result to be an array or jQuery Deferred — not an Angular promise.
+                        // FancyTree requires data.result to be an array or jQuery Deferred.
                         lazyLoad: function (event, data) {
                             var path = data.node.key;
-                            if (cache[path]) {
-                                data.result = toNodes(cache[path], path);
-                                return;
-                            }
-                            var def = $.Deferred();
+                            if (cache[path]) { data.result = toNodes(cache[path], path); return; }
+                            var def     = $.Deferred();
                             var stripped = path.replace(/^\/+/, '');
                             $http.get(
                                 urlbase + '/db/browse?folder=' + encodeURIComponent(scope.folderId) +
@@ -156,59 +165,31 @@ angular.module('syncthing.core')
                             ).then(function (r) {
                                 cache[path] = r.data || [];
                                 def.resolve(toNodes(cache[path], path));
-                            }, function () {
-                                def.reject();
-                            });
+                            }, function () { def.reject(); });
                             data.result = def.promise();
                         },
 
-                        // After children are inserted into the tree, fetch their ignore status.
                         loadChildren: function (event, data) {
-                            loadStatusForNodes(data.node.children || []);
+                            (data.node.children || []).forEach(function (node) {
+                                if (!node.data.statusLoaded) { refreshNodeStatus(node); }
+                            });
                         },
 
-                        // User toggled a checkbox.
                         select: function (event, data) {
                             var node = data.node;
                             scope.ambiguous = null;
-
-                            var promise;
-                            if (node.folder) {
-                                // checked   (node.selected=true)  → everything syncs  → addCatchAll=false
-                                // unchecked (node.selected=false) → not all syncs     → addCatchAll=true
-                                var addCatchAll = !node.selected;
-                                promise = ignoreService.toggleDirCatchAll(scope.folderId, node.key, addCatchAll);
-                            } else {
-                                // For files: checkbox = syncing.
-                                // selected=true  → was ignored → user wants to START syncing
-                                // selected=false → was syncing → user wants to STOP  syncing
-                                var wasIgnored = node.selected;
-                                promise = ignoreService.togglePath(scope.folderId, node.key, wasIgnored);
-                            }
+                            var promise = node.folder
+                                // checked=true → SBD; unchecked=false → not SBD
+                                ? ignoreService.setDirSBD(scope.folderId, node.key, node.selected)
+                                // selected=true → was ignored → start syncing; false → stop
+                                : ignoreService.togglePath(scope.folderId, node.key, node.selected);
 
                             promise.then(function (result) {
                                 if (!result.ok) {
-                                    // Revert to prior state and surface the ambiguity notice.
                                     node.setSelected(!node.selected, { noEvents: true });
                                     scope.$apply(function () { scope.ambiguous = result.ambiguous; });
                                 } else {
-                                    // Syncthing re-evaluates ignores after a write; refresh after
-                                    // a short settle delay. For directories, also refresh all
-                                    // rendered descendants since their effective state may have changed.
-                                    var h = $timeout(function () {
-                                        refreshNodeStatus(node);
-                                        if (node.folder) {
-                                            node.visit(function (child) {
-                                                child.data.statusLoaded = false;
-                                                refreshNodeStatus(child);
-                                            });
-                                        }
-                                        // Re-read root state — any write may have added/removed *.
-                                        ignoreService.dirSyncsAllByDefault(scope.folderId, '/').then(function (syncsAll) {
-                                            scope.syncAllByDefault = syncsAll;
-                                        });
-                                    }, 0);
-                                    pendingTimeouts.push(h);
+                                    refreshAfterWrite(node);
                                 }
                             });
                         },
@@ -223,41 +204,31 @@ angular.module('syncthing.core')
                     });
 
                     tree = $.ui.fancytree.getTree(el);
-                    loadStatusForNodes(tree.getRootNode().children || []);
-                }
-
-                function loadStatusForNodes(nodes) {
-                    (nodes || []).forEach(function (node) {
-                        if (!node || node.data.statusLoaded) return;
+                    (tree.getRootNode().children || []).forEach(function (node) {
                         refreshNodeStatus(node);
                     });
                 }
 
                 function refreshNodeStatus(node) {
                     if (!node || !node.key || !tree) return;
-
                     if (node.folder) {
-                        // Directory checkbox state is derived purely from patterns —
-                        // no db/file call, so no lag waiting for Syncthing re-evaluation.
                         ignoreService.dirSyncsAllByDefault(scope.folderId, node.key)
-                            .then(function (syncsAll) {
+                            .then(function (sbd) {
                                 if (!tree) return;
-                                node.setSelected(syncsAll, { noEvents: true });
+                                node.setSelected(sbd, { noEvents: true });
                                 node.data.statusLoaded = true;
                             });
                     } else {
-                        var path = node.key.replace(/^\/+/, ''); // db/file wants no leading slash
+                        var path = node.key.replace(/^\/+/, '');
                         $http.get(
                             urlbase + '/db/file?folder=' + encodeURIComponent(scope.folderId) +
                             '&file=' + encodeURIComponent(path)
                         ).then(function (r) {
                             if (!tree) return;
-                            var ignored = r.data && r.data.local && r.data.local.ignored;
-                            node.setSelected(!ignored, { noEvents: true });
+                            node.setSelected(!(r.data && r.data.local && r.data.local.ignored), { noEvents: true });
                             node.data.statusLoaded = true;
                         }, function () {
-                            // Not in local index yet — leave unchecked.
-                            node.data.statusLoaded = true;
+                            node.data.statusLoaded = true; // not in index yet — leave unchecked
                         });
                     }
                 }
