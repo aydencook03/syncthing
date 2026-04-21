@@ -112,12 +112,25 @@ angular.module('syncthing.core')
             );
         }
 
-        // True if `dir` has a catch-all pattern (i.e. `dir/*` is present).
-        function dirHasCatchAll(folderId, dir) {
+        // True if `dir` syncs everything by default — i.e. it has no catch-all of its own
+        // AND is not governed by an ancestor catch-all (or is whitelisted out of one).
+        // This is the single source of truth for directory checkbox state, derived purely
+        // from patterns (no db/file call needed, so no Syncthing re-evaluation lag).
+        function dirSyncsAllByDefault(folderId, dir) {
             dir = norm(dir);
-            var ca = catchAllIn(dir);
+            var ownCatchAll      = catchAllIn(dir);   // dir/* — blocks contents of dir
+            var ancestorCatchAll = catchAllFor(dir);  // parent/* — blocks dir itself
+            var whitelist        = '!' + dir;         // !/dir — exempts dir from parent catch-all
             return getPatterns(folderId).then(function (patterns) {
-                return patterns.indexOf(ca) !== -1;
+                // Blocked by own catch-all?
+                if (patterns.indexOf(ownCatchAll) !== -1) { return false; }
+                // Governed by ancestor catch-all and not whitelisted before it?
+                var caIdx = patterns.indexOf(ancestorCatchAll);
+                if (caIdx !== -1) {
+                    var wlIdx = patterns.indexOf(whitelist);
+                    if (wlIdx === -1 || wlIdx > caIdx) { return false; }
+                }
+                return true;
             });
         }
 
@@ -298,7 +311,7 @@ angular.module('syncthing.core')
         return {
             getPatterns:            getPatterns,
             setPatterns:            setPatterns,
-            dirHasCatchAll:    dirHasCatchAll,
+            dirSyncsAllByDefault: dirSyncsAllByDefault,
             toggleDirCatchAll: toggleDirCatchAll,
             togglePath:             togglePath
         };
