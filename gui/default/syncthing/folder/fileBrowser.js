@@ -53,8 +53,15 @@ angular.module('syncthing.core')
                 });
 
                 scope.toggleRootSS = function () {
-                    // rootSS is already flipped by ng-model; call through to the service.
-                    ignoreService.toggleDirSelectiveSync(scope.folderId, '/', scope.rootSS);
+                    // rootSS is already flipped by ng-model before this fires.
+                    var intended = scope.rootSS;
+                    ignoreService.toggleDirSelectiveSync(scope.folderId, '/', intended)
+                        .then(function (result) {
+                            if (!result.ok) {
+                                // Revert on failure (shouldn't happen — root SS has no ambiguity path).
+                                scope.rootSS = !intended;
+                            }
+                        });
                 };
 
                 scope.load = function () {
