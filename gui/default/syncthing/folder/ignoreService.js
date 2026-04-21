@@ -100,27 +100,12 @@ angular.module('syncthing.core')
             );
         }
 
-        // True if `dir` is SBD: no own catch-all, and not governed by any
-        // ancestor catch-all unless whitelisted out of it. Pure pattern read — no lag.
+        // True if `dir` is SBD: no own catch-all, and no ancestor catch-all governs it.
+        // Pure pattern read — no lag.
         function dirSyncsAllByDefault(folderId, dir) {
             dir = norm(dir);
             return getPatterns(folderId).then(function (patterns) {
-                // Blocked by own catch-all?
-                if (patterns.indexOf(catchAllIn(dir)) !== -1) { return false; }
-                // Walk every ancestor: if its catch-all is present and dir is not
-                // whitelisted before it, dir is governed by that catch-all.
-                var cur = dir;
-                while (cur !== '/') {
-                    var ca    = catchAllFor(cur);   // catch-all governing cur
-                    var caIdx = patterns.indexOf(ca);
-                    if (caIdx !== -1) {
-                        var wl    = '!' + cur;
-                        var wlIdx = patterns.indexOf(wl);
-                        if (wlIdx === -1 || wlIdx > caIdx) { return false; }
-                    }
-                    cur = parentDir(cur);
-                }
-                return true;
+                return patterns.indexOf(catchAllIn(dir)) === -1 && !isAncestorBlocked(dir, patterns);
             });
         }
 
@@ -150,6 +135,22 @@ angular.module('syncthing.core')
             return (p[0] === '/') ? p.slice(1) : p;
         }
 
+        // True if `path` is blocked by an ancestor catch-all in `patterns`
+        // (i.e. some ancestor has a catch-all and `path` has no whitelist before it).
+        function isAncestorBlocked(path, patterns) {
+            var cur = norm(path);
+            while (cur !== '/') {
+                var ca    = catchAllFor(cur);
+                var caIdx = patterns.indexOf(ca);
+                if (caIdx !== -1) {
+                    var wlIdx = patterns.indexOf('!' + cur);
+                    if (wlIdx === -1 || wlIdx > caIdx) { return true; }
+                }
+                cur = parentDir(cur);
+            }
+            return false;
+        }
+
         // Set SBD state for a directory. sbd=true → enable SBD (remove catch-all).
         //                                sbd=false → disable SBD (add catch-all).
         // Resolves to { ok: true }.
@@ -166,8 +167,7 @@ angular.module('syncthing.core')
                 var parentIdx;
 
                 if (!sbd) {
-                    // Disable SBD: clean up child patterns, then add catch-all.
-                    // Child patterns become redundant or contradictory under the new catch-all.
+                    // Disable SBD: remove own whitelist and all child patterns.
                     updated = updated.filter(function (pat) {
                         var bare = bareOf(pat);
                         if (isRoot) {
@@ -175,14 +175,12 @@ angular.module('syncthing.core')
                             if (bare.indexOf('/') !== -1) { return false; }                   // sub-paths
                             return true;
                         }
-                        return bare.indexOf(prefix) !== 0;
+                        return pat !== wl && bare.indexOf(prefix) !== 0;
                     });
-                    if (updated.indexOf(ca) === -1) { updated.push(ca); }
-                    if (!isRoot) {
-                        parentIdx = updated.indexOf(parentCa);
-                        if (parentIdx !== -1 && updated.indexOf(wl) === -1) {
-                            updated.splice(parentIdx, 0, wl);
-                        }
+                    // Only add dir/* if no ancestor catch-all already governs this dir.
+                    // (If one does, removing the whitelist is enough — dir is already blocked.)
+                    if (!isAncestorBlocked(path, updated)) {
+                        if (updated.indexOf(ca) === -1) { updated.push(ca); }
                     }
                 } else {
                     // Enable SBD: remove catch-all and all child patterns.
