@@ -12,13 +12,14 @@
 // ─── State machine ───────────────────────────────────────────────────────────
 //
 //   Every item has exactly two checkbox states:
-//     File:      ✓ synced   | ✗ ignored
-//     Directory: ✓ no-SS    | ✗ SS on   (SS = selective sync)
+//     File:      ✓ syncs          | ✗ ignored
+//     Directory: ✓ everything in this directory syncs by default
+//                ✗ not everything in this directory syncs by default
 //
 //   Ignore-file representation:
-//     Directory SS on  ↔  pattern `dir/*` present  (bare `*` for root)
-//     File ignored     ↔  literal `/file` entry, OR covered by ancestor `dir/*`
-//     Item whitelisted ↔  `!/item` before the governing `dir/*`
+//     Dir not-all-default ↔  pattern `dir/*` present  (bare `*` for root)
+//     File ignored        ↔  literal `/file` entry, OR covered by ancestor `dir/*`
+//     Item whitelisted    ↔  `!/item` before the governing `dir/*`
 //
 //   Transition rules:
 //
@@ -33,18 +34,21 @@
 //     The file must be covered by the direct-parent catch-all (invariant).
 //     Insert `!/file` before that catch-all.  No ancestor walk needed.
 //
-//   ✓→✗  dir    (enable SS):
-//     Add `dir/*`.  If parent has a catch-all, insert `!/dir` before it so
-//     the directory stays traversable.  No ancestor walk needed — ancestors
-//     stay ✓ and the dir is still accessible within them.
+//   ✓→✗  dir    (not everything syncs → mark directory):
+//     Clean up any child patterns first (orphaned whitelists / nested
+//     catch-alls become stale).  Add `dir/*`.  If parent has a catch-all,
+//     insert `!/dir` before it so the directory stays traversable.
+//     No ancestor walk needed — ancestors still sync by default and the
+//     dir remains accessible within them.
 //
-//   ✗→✓  dir    (disable SS):
+//   ✗→✓  dir    (everything syncs → unmark directory):
 //     Remove `dir/*` and ALL patterns under `dir/` (child whitelists and
 //     nested catch-alls are stale without their governing catch-all).
-//     Then manage the `!/dir` whitelist: keep/add it if parent has a catch-all
-//     (directory must remain visible), remove it if parent has no catch-all.
-//     No upward ancestor walk — the `!/dir` mechanism is enough to keep the
-//     directory accessible within any parent SS.
+//     Then manage the `!/dir` whitelist: keep/add it if parent has a
+//     catch-all (directory must remain visible), remove it if parent has
+//     no catch-all.
+//     No upward ancestor walk — the `!/dir` mechanism is enough to keep
+//     the directory accessible within any parent catch-all.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -157,6 +161,23 @@ angular.module('syncthing.core')
                 var parentIdx;
 
                 if (enableSS) {
+                    // Remove any existing child patterns under dir/ first — they are
+                    // now governed by dir/* and would be redundant or contradictory.
+                    // Reuse the same filter logic as the disable branch.
+                    updated = updated.filter(function (pat) {
+                        var bare = (pat[0] === '!') ? pat.slice(1) : pat;
+                        if (bare[0] === '/') { bare = bare.slice(1); }
+                        if (isRoot) {
+                            // Remove all direct-child whitelists (!/item) and any sub-catch-alls.
+                            // Keep non-whitelist top-level literals (they become redundant but
+                            // removing them could be surprising; user can clean via ignore editor).
+                            if (pat[0] === '!' && bare.indexOf('/') === -1) { return false; }
+                            if (bare.indexOf('/') !== -1) { return false; } // sub-path of any depth
+                            return true;
+                        }
+                        var ssPrefix = path.slice(1) + '/';
+                        return bare.indexOf(ssPrefix) !== 0;
+                    });
                     // Add dir/* if not already present.
                     if (updated.indexOf(dirCatchAll) === -1) {
                         updated.push(dirCatchAll);
