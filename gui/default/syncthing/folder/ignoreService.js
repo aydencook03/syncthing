@@ -141,32 +141,38 @@ angular.module('syncthing.core')
             }
         }
 
+        // Strip negation and leading slash from a pattern to get a comparable bare path.
+        function bareOf(pat) {
+            var p = (pat[0] === '!') ? pat.slice(1) : pat;
+            return (p[0] === '/') ? p.slice(1) : p;
+        }
+
         // Set SBD state for a directory. sbd=true → enable SBD (remove catch-all).
         //                                sbd=false → disable SBD (add catch-all).
         // Resolves to { ok: true }.
         function setDirSBD(folderId, path, sbd) {
             path = norm(path);
-            var isRoot     = (path === '/');
-            var ca         = catchAllIn(path);
-            var parentCa   = isRoot ? null : catchAllFor(path);
-            var wl         = '!' + path;
+            var isRoot   = (path === '/');
+            var ca       = catchAllIn(path);
+            var parentCa = isRoot ? null : catchAllFor(path);
+            var wl       = '!' + path;
+            var prefix   = path.slice(1) + '/'; // e.g. 'photos/' — unused for root
 
             return getPatterns(folderId).then(function (patterns) {
                 var updated = patterns.slice();
                 var parentIdx;
 
                 if (!sbd) {
-                    // Disable SBD: add catch-all. Clean up child patterns first —
-                    // they become redundant or contradictory under the new catch-all.
+                    // Disable SBD: clean up child patterns, then add catch-all.
+                    // Child patterns become redundant or contradictory under the new catch-all.
                     updated = updated.filter(function (pat) {
-                        var bare = (pat[0] === '!') ? pat.slice(1) : pat;
-                        if (bare[0] === '/') { bare = bare.slice(1); }
+                        var bare = bareOf(pat);
                         if (isRoot) {
                             if (pat[0] === '!' && bare.indexOf('/') === -1) { return false; } // !/child
                             if (bare.indexOf('/') !== -1) { return false; }                   // sub-paths
                             return true;
                         }
-                        return bare.indexOf(path.slice(1) + '/') !== 0;
+                        return bare.indexOf(prefix) !== 0;
                     });
                     if (updated.indexOf(ca) === -1) { updated.push(ca); }
                     if (!isRoot) {
@@ -176,17 +182,16 @@ angular.module('syncthing.core')
                         }
                     }
                 } else {
-                    // Enable SBD: remove catch-all and all child patterns
-                    // (whitelists and nested catch-alls are stale without their governing catch-all).
+                    // Enable SBD: remove catch-all and all child patterns.
+                    // Child whitelists and nested catch-alls are stale without their governing catch-all.
                     updated = updated.filter(function (pat) {
-                        var bare = (pat[0] === '!') ? pat.slice(1) : pat;
-                        if (bare[0] === '/') { bare = bare.slice(1); }
+                        var bare = bareOf(pat);
                         if (isRoot) {
                             if (bare === ca) { return false; }                                 // *
                             if (pat[0] === '!' && bare.indexOf('/') === -1) { return false; }  // !/child
                             return true;
                         }
-                        return bare !== ca && bare.indexOf(path.slice(1) + '/') !== 0;
+                        return bare !== ca && bare.indexOf(prefix) !== 0;
                     });
                     if (!isRoot) {
                         parentIdx = updated.indexOf(parentCa);
