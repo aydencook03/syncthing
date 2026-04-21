@@ -179,9 +179,9 @@ angular.module('syncthing.core')
                             var node = data.node;
                             scope.ambiguous = null;
                             var promise = node.folder
-                                // checked=true → SBD; unchecked=false → not SBD
+                                // checked=SBD, unchecked=not-SBD; node.selected is the new state
                                 ? ignoreService.setDirSBD(scope.folderId, node.key, node.selected)
-                                // selected=true → was ignored → start syncing; false → stop
+                                // node.selected is the new state; newly-checked means it was ignored
                                 : ignoreService.togglePath(scope.folderId, node.key, node.selected);
 
                             promise.then(function (result) {
@@ -195,9 +195,10 @@ angular.module('syncthing.core')
                         },
 
                         // Click on folder title → expand/collapse.
+                        // noAnimation avoids the "setExpanded while animating" warning on rapid clicks.
                         click: function (event, data) {
                             if (data.targetType === 'title' && data.node.isFolder()) {
-                                data.node.toggleExpanded();
+                                data.node.toggleExpanded({ noAnimation: true });
                                 return false;
                             }
                         }
