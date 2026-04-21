@@ -36,7 +36,7 @@ angular.module('syncthing.core')
                 }
 
                 function refreshRootSBD() {
-                    ignoreService.dirSyncsAllByDefault(scope.folderId, '/').then(function (sbd) {
+                    ignoreService.getSBD(scope.folderId, '/', true).then(function (sbd) {
                         scope.syncAllByDefault = sbd;
                     });
                 }
@@ -79,7 +79,7 @@ angular.module('syncthing.core')
                     // Flip ourselves (no ng-model — avoids ng-if child scope shadowing).
                     scope.syncAllByDefault = !scope.syncAllByDefault;
                     var intended = scope.syncAllByDefault;
-                    ignoreService.setDirSBD(scope.folderId, '/', intended)
+                    ignoreService.setSBD(scope.folderId, '/', intended, true)
                         .then(function (result) {
                             if (!result.ok) {
                                 scope.syncAllByDefault = !intended; // revert
@@ -178,11 +178,8 @@ angular.module('syncthing.core')
                         select: function (event, data) {
                             var node = data.node;
                             scope.ambiguous = null;
-                            var promise = node.folder
-                                // checked=SBD, unchecked=not-SBD; node.selected is the new state
-                                ? ignoreService.setDirSBD(scope.folderId, node.key, node.selected)
-                                // node.selected is the new state; newly-checked means it was ignored
-                                : ignoreService.togglePath(scope.folderId, node.key, node.selected);
+                            var isDir   = node.folder;
+                            var promise = ignoreService.setSBD(scope.folderId, node.key, node.selected, isDir);
 
                             promise.then(function (result) {
                                 if (!result.ok) {
@@ -212,26 +209,12 @@ angular.module('syncthing.core')
 
                 function refreshNodeStatus(node) {
                     if (!node || !node.key || !tree) return;
-                    if (node.folder) {
-                        ignoreService.dirSyncsAllByDefault(scope.folderId, node.key)
-                            .then(function (sbd) {
-                                if (!tree) return;
-                                node.setSelected(sbd, { noEvents: true });
-                                node.data.statusLoaded = true;
-                            });
-                    } else {
-                        var path = node.key.replace(/^\/+/, '');
-                        $http.get(
-                            urlbase + '/db/file?folder=' + encodeURIComponent(scope.folderId) +
-                            '&file=' + encodeURIComponent(path)
-                        ).then(function (r) {
+                    ignoreService.getSBD(scope.folderId, node.key, node.folder)
+                        .then(function (sbd) {
                             if (!tree) return;
-                            node.setSelected(!(r.data && r.data.local && r.data.local.ignored), { noEvents: true });
+                            node.setSelected(sbd, { noEvents: true });
                             node.data.statusLoaded = true;
-                        }, function () {
-                            node.data.statusLoaded = true; // not in index yet — leave unchecked
                         });
-                    }
                 }
 
                 scope.openIgnorePatterns = function () {
