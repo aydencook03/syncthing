@@ -210,12 +210,19 @@ angular.module('syncthing.core')
                 if (updated.indexOf(ca) !== -1) { break; } // already not-SBD — stop
                 updated.push(ca);
                 if (dir === '/') { break; }
-                // Insert !/dir before the parent catch-all so this dir stays traversable.
-                var parentCa = catchAllIn(parentDir(dir));
-                var parentIdx = updated.indexOf(parentCa);
+                // Ensure !/dir precedes the parent catch-all so this dir stays traversable.
+                // If the parent catch-all is already present, splice before it.
+                // If not (it will be pushed in the next iteration), push now — it will
+                // naturally appear before the parent catch-all that gets appended next.
                 var wl = wlFor(dir);
-                if (parentIdx !== -1 && updated.indexOf(wl) === -1) {
-                    updated.splice(parentIdx, 0, wl);
+                if (updated.indexOf(wl) === -1) {
+                    var parentCa  = catchAllIn(parentDir(dir));
+                    var parentIdx = updated.indexOf(parentCa);
+                    if (parentIdx !== -1) {
+                        updated.splice(parentIdx, 0, wl);
+                    } else {
+                        updated.push(wl);
+                    }
                 }
                 dir = parentDir(dir);
             }
@@ -268,7 +275,7 @@ angular.module('syncthing.core')
                     // Only add dir/* if no ancestor catch-all already governs this dir.
                     // (If one does, removing the whitelist is enough — dir is already blocked.)
                     if (!isAncestorBlocked(path, updated)) {
-                        if (updated.indexOf(ca) === -1) { updated.push(ca); }
+                        updated.push(ca); // filter already removed any prior ca
                     }
                 } else {
                     // Enable SBD: remove catch-all and all child patterns.
