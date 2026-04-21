@@ -6,10 +6,13 @@
         <h4 class="modal-title">{{folderName}} — Files</h4>
       </div>
       <div class="modal-body" style="padding: 0;">
-        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; color: #888; font-size: 12px;">
-          <span ng-if="!loading && !error">Showing all files in the cluster. Checked items sync to this device.</span>
-          <span ng-if="loading"><span class="fas fa-spinner fa-spin"></span> Loading...</span>
+        <div style="padding: 10px 15px; border-bottom: 1px solid #ddd; font-size: 12px; display: flex; align-items: center; justify-content: space-between;">
+          <span style="color: #888;" ng-if="!loading && !error">Checked items sync to this device. For folders, checked means all contents sync.</span>
+          <span style="color: #888;" ng-if="loading"><span class="fas fa-spinner fa-spin"></span> Loading...</span>
           <span ng-if="error" class="text-danger">{{error}} <a href ng-click="load()">Retry</a></span>
+          <label ng-if="!loading && !error" style="margin: 0; font-weight: normal; white-space: nowrap; padding-left: 16px;">
+            <input type="checkbox" ng-model="rootSS" ng-change="toggleRootSS()"> Selective Sync
+          </label>
         </div>
         <div style="overflow-y: auto; max-height: 60vh; padding: 8px;">
           <div id="file-browser-tree-{{folderId}}" ng-if="!loading && !error"></div>
