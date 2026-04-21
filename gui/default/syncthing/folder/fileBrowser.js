@@ -177,9 +177,18 @@ angular.module('syncthing.core')
                                     node.setSelected(!node.selected, { noEvents: true });
                                     scope.$apply(function () { scope.ambiguous = result.ambiguous; });
                                 } else {
-                                    // Syncthing re-evaluates ignores automatically after a write;
-                                    // refresh this node's real status after a short settle delay.
-                                    var h = $timeout(function () { refreshNodeStatus(node); }, 800);
+                                    // Syncthing re-evaluates ignores after a write; refresh after
+                                    // a short settle delay. For directories, also refresh all
+                                    // rendered descendants since their effective state may have changed.
+                                    var h = $timeout(function () {
+                                        refreshNodeStatus(node);
+                                        if (node.folder) {
+                                            node.visit(function (child) {
+                                                child.data.statusLoaded = false;
+                                                refreshNodeStatus(child);
+                                            });
+                                        }
+                                    }, 800);
                                     pendingTimeouts.push(h);
                                 }
                             });
@@ -209,15 +218,37 @@ angular.module('syncthing.core')
                     if (!node || !node.key || !tree) return;
 
                     if (node.folder) {
-                        // For directories: checkbox reflects selective sync state.
-                        // checked = SS off (everything inside syncs).
-                        // unchecked = SS on (path/* exists, nothing inside syncs by default).
-                        ignoreService.hasDirSelectiveSync(scope.folderId, node.key)
-                            .then(function (hasSS) {
-                                if (!tree) return;
-                                node.setSelected(!hasSS, { noEvents: true });
+                        // A directory is SS-on (unchecked) if Syncthing considers it
+                        // ignored (blocked by an ancestor catch-all) OR if it has its
+                        // own dir/* pattern. Both signals are needed: local.ignored
+                        // catches ancestor-inherited blocking; dir/* catches explicit SS.
+                        var dirPath = node.key.replace(/^\/+/, '');
+                        $http.get(
+                            urlbase + '/db/file?folder=' + encodeURIComponent(scope.folderId) +
+                            '&file=' + encodeURIComponent(dirPath)
+                        ).then(function (r) {
+                            if (!tree) return;
+                            var ignoredByAncestor = r.data && r.data.local && r.data.local.ignored;
+                            if (ignoredByAncestor) {
+                                node.setSelected(false, { noEvents: true });
                                 node.data.statusLoaded = true;
-                            });
+                            } else {
+                                ignoreService.hasDirSelectiveSync(scope.folderId, node.key)
+                                    .then(function (hasSS) {
+                                        if (!tree) return;
+                                        node.setSelected(!hasSS, { noEvents: true });
+                                        node.data.statusLoaded = true;
+                                    });
+                            }
+                        }, function () {
+                            // Not in local index yet — check patterns only.
+                            ignoreService.hasDirSelectiveSync(scope.folderId, node.key)
+                                .then(function (hasSS) {
+                                    if (!tree) return;
+                                    node.setSelected(!hasSS, { noEvents: true });
+                                    node.data.statusLoaded = true;
+                                });
+                        });
                     } else {
                         var path = node.key.replace(/^\/+/, ''); // db/file wants no leading slash
                         $http.get(
