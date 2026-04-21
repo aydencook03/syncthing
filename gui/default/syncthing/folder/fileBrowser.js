@@ -53,9 +53,9 @@ angular.module('syncthing.core')
                 });
 
                 scope.toggleRootSS = function () {
-                    // syncAllByDefault is already flipped by ng-model before this fires.
-                    // checked (true)  = everything syncs = SS off (enableSS=false)
-                    // unchecked (false) = not all syncs  = SS on  (enableSS=true)
+                    // Flip the model ourselves (no ng-model — avoids ng-if child scope shadowing).
+                    // intended = post-flip state; enableSS is opposite (checked = everything syncs = SS off).
+                    scope.syncAllByDefault = !scope.syncAllByDefault;
                     var intended = scope.syncAllByDefault;
                     var enableSS = !intended;
                     ignoreService.toggleDirSelectiveSync(scope.folderId, '/', enableSS)
