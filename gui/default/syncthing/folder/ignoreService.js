@@ -29,7 +29,7 @@
 //
 //   ✗→✓  file  (start syncing):
 //     If a literal ignore entry exists, remove it.
-//     If the direct-parent catch-all exists, insert `!/file` before it.
+//     If any ancestor catch-all exists, insert `!/file` before the nearest one.
 //     Otherwise: ambiguous (non-literal pattern in control) — surface to user.
 //
 //   ✓→✗  dir   (disable SBD):
@@ -42,28 +42,49 @@
 //     catch-all). Keep/add `!/dir` if parent is not-SBD (so the dir
 //     remains visible); remove it if parent is SBD.
 //
+// ─── Escaping ────────────────────────────────────────────────────────────────
+//
+//   Syncthing treats *, ?, [, ], {, }, \ as glob metacharacters in patterns.
+//   Any of these appearing in an actual file/directory name must be escaped
+//   with a backslash when embedded in a pattern (e.g. `[Work]` → `\[Work\]`).
+//   All pattern-construction helpers (catchAllFor, wlFor) escape their inputs.
+//   bareOf() unescapes when stripping so that all internal comparisons operate
+//   on plain unescaped paths.
+//
 // ─────────────────────────────────────────────────────────────────────────────
 
 angular.module('syncthing.core')
     .factory('ignoreService', ['$http', function ($http) {
         'use strict';
 
-        // A pattern is "literal" if it has no glob chars, no #include, no comment.
-        // We only auto-mutate literal patterns; anything else surfaces as ambiguous.
+        // Escape glob-special characters in a path so it is treated as a
+        // literal when embedded in an .stignore pattern.
+        function escapePath(path) {
+            return path.replace(/([\\*?\[\]{}])/g, '\\$1');
+        }
+
+        // Unescape a path extracted from a pattern (reverse of escapePath).
+        function unescapePath(path) {
+            return path.replace(/\\([\\*?\[\]{}])/g, '$1');
+        }
+
+        // A pattern is "literal" if it has no unescaped glob chars and is not
+        // a comment or #include. We only auto-mutate literal patterns; anything
+        // else surfaces as ambiguous.
         function isLiteral(pattern) {
             var p = (pattern[0] === '!') ? pattern.slice(1) : pattern;
-            return p[0] !== '#' && !/[*?\\[{]/.test(p);
+            if (p[0] === '#') { return false; }
+            // Walk the string; a backslash escapes the next char (not a glob)
+            for (var i = 0; i < p.length; i++) {
+                if (p[i] === '\\') { i++; continue; }
+                if (/[*?\[{]/.test(p[i])) { return false; }
+            }
+            return true;
         }
 
         // Normalise a path to always have a leading slash.
         function norm(path) {
             return (path[0] === '/') ? path : '/' + path;
-        }
-
-        // Strip negation prefix and leading slash for comparison against a normalised path.
-        function withSlash(pattern) {
-            var p = (pattern[0] === '!') ? pattern.slice(1) : pattern;
-            return (p[0] === '/') ? p : '/' + p;
         }
 
         // Parent directory of a normalised path.
@@ -74,11 +95,13 @@ angular.module('syncthing.core')
         }
 
         // Catch-all pattern governing `path` (blocks everything in path's parent dir).
+        // Paths are plain (unescaped); the returned pattern is escaped.
         //   '/img.jpg'        → '*'
-        //   '/photos/img.jpg' → 'photos/*'
+        //   '/photos/img.jpg' → 'photos/*'       (assuming 'photos' has no special chars)
+        //   '/[Work]/f.txt'   → '\[Work\]/*'
         function catchAllFor(path) {
             var parent = parentDir(path);
-            return (parent === '/') ? '*' : parent.slice(1) + '/*';
+            return (parent === '/') ? '*' : escapePath(parent.slice(1)) + '/*';
         }
 
         // Catch-all pattern for the contents of a directory (disables SBD for that dir).
@@ -86,6 +109,36 @@ angular.module('syncthing.core')
         //   '/photos' → 'photos/*'
         function catchAllIn(dir) {
             return catchAllFor(dir + '/x');
+        }
+
+        // Whitelist pattern for a path (allows it through an ancestor catch-all).
+        // '/photos'           → '!/photos'
+        // '/[Work]'           → '!/\[Work\]'
+        // '/[Work]/vacation'  → '!/\[Work\]/vacation'
+        function wlFor(path) {
+            // path is normalised ('/foo/bar'). Strip leading slash, escape each
+            // segment individually, then re-add '!/' prefix.
+            var segments = path.slice(1).split('/');
+            return '!/' + segments.map(escapePath).join('/');
+        }
+
+        // Strip negation prefix, leading slash, and glob escapes from a pattern
+        // to get a plain comparable path (no leading slash).
+        // '!/\[Work\]/*'  → '[Work]/*'   (note: we only unescape, not strip /*)
+        // '!/photos'      → 'photos'
+        // 'photos/*'      → 'photos/*'
+        function bareOf(pat) {
+            var p = (pat[0] === '!') ? pat.slice(1) : pat;
+            p = (p[0] === '/') ? p.slice(1) : p;
+            return unescapePath(p);
+        }
+
+        // Convert a stored pattern back to a plain normalised path (with leading slash).
+        // Used to compare stored patterns against path arguments.
+        // '!/\[Work\]' → '/[Work]'
+        // 'photos'     → '/photos'
+        function patternToPath(pat) {
+            return '/' + bareOf(pat);
         }
 
         function getPatterns(folderId) {
@@ -122,17 +175,12 @@ angular.module('syncthing.core')
                 // Insert !/dir before the parent catch-all so this dir stays traversable.
                 var parentCa = catchAllIn(parentDir(dir));
                 var parentIdx = updated.indexOf(parentCa);
-                if (parentIdx !== -1 && updated.indexOf('!' + dir) === -1) {
-                    updated.splice(parentIdx, 0, '!' + dir);
+                var wl = wlFor(dir);
+                if (parentIdx !== -1 && updated.indexOf(wl) === -1) {
+                    updated.splice(parentIdx, 0, wl);
                 }
                 dir = parentDir(dir);
             }
-        }
-
-        // Strip negation and leading slash from a pattern to get a comparable bare path.
-        function bareOf(pat) {
-            var p = (pat[0] === '!') ? pat.slice(1) : pat;
-            return (p[0] === '/') ? p.slice(1) : p;
         }
 
         // True if `path` is blocked by an ancestor catch-all in `patterns`
@@ -143,7 +191,8 @@ angular.module('syncthing.core')
                 var ca    = catchAllFor(cur);
                 var caIdx = patterns.indexOf(ca);
                 if (caIdx !== -1) {
-                    var wlIdx = patterns.indexOf('!' + cur);
+                    var wl    = wlFor(cur);
+                    var wlIdx = patterns.indexOf(wl);
                     if (wlIdx === -1 || wlIdx > caIdx) { return true; }
                 }
                 cur = parentDir(cur);
@@ -158,9 +207,10 @@ angular.module('syncthing.core')
             path = norm(path);
             var isRoot   = (path === '/');
             var ca       = catchAllIn(path);
+            var bareCa   = bareOf(ca);          // unescaped, for filter comparisons
             var parentCa = isRoot ? null : catchAllFor(path);
-            var wl       = '!' + path;
-            var prefix   = path.slice(1) + '/'; // e.g. 'photos/' — unused for root
+            var wl       = wlFor(path);
+            var prefix   = path.slice(1) + '/'; // e.g. 'photos/' — unused for root; unescaped
 
             return getPatterns(folderId).then(function (patterns) {
                 var updated = patterns.slice();
@@ -193,7 +243,7 @@ angular.module('syncthing.core')
                             if (pat[0] === '!') { return false; }           // remaining whitelists (e.g. !/child)
                             return true;                                     // keep: literal root-level file ignores
                         }
-                        return bare !== ca && bare.indexOf(prefix) !== 0;
+                        return bare !== bareCa && bare.indexOf(prefix) !== 0;
                     });
                     if (!isRoot) {
                         parentIdx = updated.indexOf(parentCa);
@@ -221,17 +271,17 @@ angular.module('syncthing.core')
                     // 1. Literal ignore entry → remove it.
                     for (i = 0; i < patterns.length; i++) {
                         p = patterns[i];
-                        if (isLiteral(p) && p[0] !== '!' && withSlash(p) === path) {
+                        if (isLiteral(p) && p[0] !== '!' && patternToPath(p) === path) {
                             updated = patterns.slice();
                             updated.splice(i, 1);
                             return setPatterns(folderId, updated).then(ok);
                         }
                     }
-                    // 2. Parent catch-all exists → whitelist the file before it.
-                    idx = patterns.indexOf(catchAllFor(path));
+                    // 2. Find the nearest ancestor catch-all and insert !/file before it.
+                    idx = nearestAncestorCatchAll(path, patterns);
                     if (idx !== -1) {
                         updated = patterns.slice();
-                        updated.splice(idx, 0, '!' + path);
+                        updated.splice(idx, 0, wlFor(path));
                         return setPatterns(folderId, updated).then(ok);
                     }
                     // 3. Can't determine — surface the culprit.
@@ -242,7 +292,7 @@ angular.module('syncthing.core')
                     // 1. !/file whitelist → remove it (re-exposes to parent catch-all).
                     for (i = 0; i < patterns.length; i++) {
                         p = patterns[i];
-                        if (isLiteral(p) && p[0] === '!' && withSlash(p) === path) {
+                        if (isLiteral(p) && p[0] === '!' && patternToPath(p) === path) {
                             updated = patterns.slice();
                             updated.splice(i, 1);
                             return setPatterns(folderId, updated).then(ok);
@@ -251,7 +301,7 @@ angular.module('syncthing.core')
                     // 2. Literal ignore already exists → no-op.
                     for (i = 0; i < patterns.length; i++) {
                         p = patterns[i];
-                        if (isLiteral(p) && p[0] !== '!' && withSlash(p) === path) {
+                        if (isLiteral(p) && p[0] !== '!' && patternToPath(p) === path) {
                             return ok();
                         }
                     }
@@ -262,6 +312,19 @@ angular.module('syncthing.core')
                     return setPatterns(folderId, updated).then(ok);
                 }
             });
+        }
+
+        // Index of the nearest ancestor catch-all pattern in `patterns` for `path`.
+        // Walks from direct parent upward; returns -1 if none found.
+        function nearestAncestorCatchAll(path, patterns) {
+            var cur = norm(path);
+            while (cur !== '/') {
+                var ca  = catchAllFor(cur);
+                var idx = patterns.indexOf(ca);
+                if (idx !== -1) { return idx; }
+                cur = parentDir(cur);
+            }
+            return -1;
         }
 
         function ok() { return { ok: true }; }
