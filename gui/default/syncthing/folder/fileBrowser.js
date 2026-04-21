@@ -63,16 +63,10 @@ angular.module('syncthing.core')
                             if (!result.ok) {
                                 scope.syncAllByDefault = !intended;
                             } else {
-                                // Refresh all rendered top-level nodes — root catch-all change
-                                // affects the effective state of every child.
-                                var h = $timeout(function () {
-                                    if (!tree) return;
-                                    tree.getRootNode().visit(function (child) {
-                                        child.data.statusLoaded = false;
-                                        refreshNodeStatus(child);
-                                    });
-                                }, 800);
-                                pendingTimeouts.push(h);
+                                // Reload the whole tree — a root catch-all change affects
+                                // every node, and pattern state is immediately consistent
+                                // whereas db/file.local.ignored may lag behind.
+                                scope.load();
                             }
                         });
                 };
