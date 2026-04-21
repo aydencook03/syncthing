@@ -195,9 +195,10 @@ angular.module('syncthing.core')
                         },
 
                         // Click on folder title → expand/collapse.
+                        // noAnimation avoids the "setExpanded while animating" warning on rapid clicks.
                         click: function (event, data) {
                             if (data.targetType === 'title' && data.node.isFolder()) {
-                                data.node.toggleExpanded();
+                                data.node.toggleExpanded({ noAnimation: true });
                                 return false;
                             }
                         }
