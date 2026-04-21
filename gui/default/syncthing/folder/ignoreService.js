@@ -153,13 +153,51 @@ angular.module('syncthing.core')
             );
         }
 
-        // True if `dir` is SBD: no own catch-all, and no ancestor catch-all governs it.
-        // Pure pattern read — no lag.
-        function dirSyncsAllByDefault(folderId, dir) {
-            dir = norm(dir);
-            return getPatterns(folderId).then(function (patterns) {
-                return patterns.indexOf(catchAllIn(dir)) === -1 && !isAncestorBlocked(dir, patterns);
-            });
+        // ─── Public API ──────────────────────────────────────────────────────────
+        //
+        //   getSBD(folderId, path, isDir) → Promise<bool>
+        //     Ask whether `path` syncs by default.
+        //     For directories: derived from ignore patterns (no Syncthing lag).
+        //     For files: asks Syncthing's db/file endpoint (authoritative).
+        //
+        //   setSBD(folderId, path, sbd, isDir) → Promise<{ok} | {ok:false, ambiguous}>
+        //     Toggle the SBD state of `path`.
+        //     For directories: adds/removes catch-all patterns.
+        //     For files: adds/removes whitelist or literal ignore entries.
+        //     Returns {ok:false, ambiguous} when a non-literal pattern is in
+        //     control and we cannot safely mutate it — the culprit is surfaced.
+        //
+        // ─────────────────────────────────────────────────────────────────────────
+
+        function getSBD(folderId, path, isDir) {
+            path = norm(path);
+            if (isDir) {
+                // Derived purely from patterns — no round-trip to Syncthing's
+                // ignore evaluator, so there is no re-evaluation lag.
+                return getPatterns(folderId).then(function (patterns) {
+                    return patterns.indexOf(catchAllIn(path)) === -1 && !isAncestorBlocked(path, patterns);
+                });
+            } else {
+                // Syncthing's backend is authoritative for files: it evaluates
+                // the full ignore ruleset including #include directives.
+                var stripped = path.replace(/^\/+/, '');
+                return $http.get(
+                    urlbase + '/db/file?folder=' + encodeURIComponent(folderId) +
+                    '&file=' + encodeURIComponent(stripped)
+                ).then(
+                    function (r) { return !(r.data && r.data.local && r.data.local.ignored); },
+                    function ()  { return false; } // not in index yet — treat as not-SBD
+                );
+            }
+        }
+
+        function setSBD(folderId, path, sbd, isDir) {
+            if (isDir) {
+                return setDirSBD(folderId, path, sbd);
+            } else {
+                // `nowSelected` = the new desired state = sbd
+                return togglePath(folderId, path, sbd);
+            }
         }
 
         // Disable SBD on every ancestor of `path` that is currently SBD,
@@ -342,10 +380,10 @@ angular.module('syncthing.core')
         }
 
         return {
-            getPatterns:          getPatterns,
-            setPatterns:          setPatterns,
-            dirSyncsAllByDefault: dirSyncsAllByDefault,
-            setDirSBD:            setDirSBD,
-            togglePath:           togglePath
+            getSBD:      getSBD,
+            setSBD:      setSBD,
+            // Low-level pattern access for the Ignore Patterns editor.
+            getPatterns: getPatterns,
+            setPatterns: setPatterns
         };
     }]);
