@@ -11,7 +11,7 @@
           <span style="color: #888;" ng-if="loading"><span class="fas fa-spinner fa-spin"></span> Loading...</span>
           <span ng-if="error" class="text-danger">{{error}} <a href ng-click="load()">Retry</a></span>
           <label ng-if="!loading && !error" style="margin: 0; font-weight: normal; white-space: nowrap; padding-left: 16px;">
-            <input type="checkbox" ng-checked="syncAllByDefault" ng-click="toggleRootCatchAll()"> Sync everything by default
+            <input type="checkbox" ng-checked="syncAllByDefault" ng-click="toggleRootSBD()"> Sync everything by default
           </label>
         </div>
         <div style="overflow-y: auto; max-height: 60vh; padding: 8px;">
