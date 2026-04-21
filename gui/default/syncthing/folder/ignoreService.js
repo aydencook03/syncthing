@@ -188,9 +188,10 @@ angular.module('syncthing.core')
                     updated = updated.filter(function (pat) {
                         var bare = bareOf(pat);
                         if (isRoot) {
-                            if (bare === ca) { return false; }                                 // *
-                            if (pat[0] === '!' && bare.indexOf('/') === -1) { return false; }  // !/child
-                            return true;
+                            if (bare === '*') { return false; }              // root catch-all
+                            if (bare.indexOf('/') !== -1) { return false; } // child catch-alls + nested sub-paths
+                            if (pat[0] === '!') { return false; }           // remaining whitelists (e.g. !/child)
+                            return true;                                     // keep: literal root-level file ignores
                         }
                         return bare !== ca && bare.indexOf(prefix) !== 0;
                     });
