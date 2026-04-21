@@ -63,10 +63,19 @@ angular.module('syncthing.core')
                             if (!result.ok) {
                                 scope.syncAllByDefault = !intended;
                             } else {
-                                // Reload the whole tree — a root catch-all change affects
-                                // every node, and pattern state is immediately consistent
-                                // whereas db/file.local.ignored may lag behind.
-                                scope.load();
+                                // Refresh all rendered nodes — root catch-all change
+                                // affects every directory's effective state.
+                                var h = $timeout(function () {
+                                    if (!tree) return;
+                                    tree.getRootNode().visit(function (child) {
+                                        child.data.statusLoaded = false;
+                                        refreshNodeStatus(child);
+                                    });
+                                    ignoreService.dirSyncsAllByDefault(scope.folderId, '/').then(function (syncsAll) {
+                                        scope.syncAllByDefault = syncsAll;
+                                    });
+                                }, 0);
+                                pendingTimeouts.push(h);
                             }
                         });
                 };
@@ -76,8 +85,8 @@ angular.module('syncthing.core')
                     scope.error   = null;
                     scope.empty   = false;
 
-                    ignoreService.dirHasCatchAll(scope.folderId, '/').then(function (hasCatchAll) {
-                        scope.syncAllByDefault = !hasCatchAll;
+                    ignoreService.dirSyncsAllByDefault(scope.folderId, '/').then(function (syncsAll) {
+                        scope.syncAllByDefault = syncsAll;
                     });
 
                     $http.get(urlbase + '/db/browse?folder=' + encodeURIComponent(scope.folderId) + '&levels=1')
@@ -95,7 +104,7 @@ angular.module('syncthing.core')
                 };
 
                 // Convert db/browse items to FancyTree node definitions.
-                // Checkbox state starts false; real state loaded async via db/file.
+                // Checkbox state starts false; real state loaded async via ignoreService.
                 function toNodes(items, parentPath) {
                     return items.map(function (item) {
                         var path = parentPath + '/' + item.name;
@@ -124,7 +133,7 @@ angular.module('syncthing.core')
                     $(el).fancytree({
                         extensions: ['glyph'],
                         checkbox: true,
-                        selectMode: 2,          // independent checkboxes — state comes from db/file per node
+                        selectMode: 2,          // independent checkboxes — state loaded async per node
                         clickFolderMode: 4,     // click title → expand; click checkbox → select
                         autoActivate: false,
                         escapeTitles: false,    // titles contain safe HTML (size badge)
@@ -194,11 +203,11 @@ angular.module('syncthing.core')
                                                 refreshNodeStatus(child);
                                             });
                                         }
-                                        // Re-read root catch-all state — any write may have added/removed *.
-                                        ignoreService.dirHasCatchAll(scope.folderId, '/').then(function (hasCatchAll) {
-                                            scope.syncAllByDefault = !hasCatchAll;
+                                        // Re-read root state — any write may have added/removed *.
+                                        ignoreService.dirSyncsAllByDefault(scope.folderId, '/').then(function (syncsAll) {
+                                            scope.syncAllByDefault = syncsAll;
                                         });
-                                    }, 800);
+                                    }, 0);
                                     pendingTimeouts.push(h);
                                 }
                             });
@@ -228,37 +237,14 @@ angular.module('syncthing.core')
                     if (!node || !node.key || !tree) return;
 
                     if (node.folder) {
-                        // A directory is unchecked if Syncthing considers it ignored
-                        // (blocked by an ancestor catch-all) OR if it has its own dir/*.
-                        // Both signals are needed: local.ignored catches ancestor-inherited
-                        // blocking; dir/* catches an explicit catch-all on this directory.
-                        var dirPath = node.key.replace(/^\/+/, '');
-                        $http.get(
-                            urlbase + '/db/file?folder=' + encodeURIComponent(scope.folderId) +
-                            '&file=' + encodeURIComponent(dirPath)
-                        ).then(function (r) {
-                            if (!tree) return;
-                            var ignoredByAncestor = r.data && r.data.local && r.data.local.ignored;
-                            if (ignoredByAncestor) {
-                                node.setSelected(false, { noEvents: true });
+                        // Directory checkbox state is derived purely from patterns —
+                        // no db/file call, so no lag waiting for Syncthing re-evaluation.
+                        ignoreService.dirSyncsAllByDefault(scope.folderId, node.key)
+                            .then(function (syncsAll) {
+                                if (!tree) return;
+                                node.setSelected(syncsAll, { noEvents: true });
                                 node.data.statusLoaded = true;
-                            } else {
-                                ignoreService.dirHasCatchAll(scope.folderId, node.key)
-                                    .then(function (hasCatchAll) {
-                                        if (!tree) return;
-                                        node.setSelected(!hasCatchAll, { noEvents: true });
-                                        node.data.statusLoaded = true;
-                                    });
-                            }
-                        }, function () {
-                            // Not in local index yet — check patterns only.
-                            ignoreService.dirHasCatchAll(scope.folderId, node.key)
-                                .then(function (hasCatchAll) {
-                                    if (!tree) return;
-                                    node.setSelected(!hasCatchAll, { noEvents: true });
-                                    node.data.statusLoaded = true;
-                                });
-                        });
+                            });
                     } else {
                         var path = node.key.replace(/^\/+/, ''); // db/file wants no leading slash
                         $http.get(
