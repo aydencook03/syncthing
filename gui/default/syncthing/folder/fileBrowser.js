@@ -52,18 +52,18 @@ angular.module('syncthing.core')
                     if (tree) { try { tree.destroy(); } catch(e) {} tree = null; }
                 });
 
-                scope.toggleRootSS = function () {
+                scope.toggleRootCatchAll = function () {
                     // Flip the model ourselves (no ng-model — avoids ng-if child scope shadowing).
-                    // intended = post-flip state; enableSS is opposite (checked = everything syncs = SS off).
+                    // intended = post-flip state; addCatchAll is opposite (checked = everything syncs = no catch-all).
                     scope.syncAllByDefault = !scope.syncAllByDefault;
                     var intended = scope.syncAllByDefault;
-                    var enableSS = !intended;
-                    ignoreService.toggleDirSelectiveSync(scope.folderId, '/', enableSS)
+                    var addCatchAll = !intended;
+                    ignoreService.toggleDirCatchAll(scope.folderId, '/', addCatchAll)
                         .then(function (result) {
                             if (!result.ok) {
                                 scope.syncAllByDefault = !intended;
                             } else {
-                                // Refresh all rendered top-level nodes — root SS change
+                                // Refresh all rendered top-level nodes — root catch-all change
                                 // affects the effective state of every child.
                                 var h = $timeout(function () {
                                     if (!tree) return;
@@ -82,8 +82,8 @@ angular.module('syncthing.core')
                     scope.error   = null;
                     scope.empty   = false;
 
-                    ignoreService.hasDirSelectiveSync(scope.folderId, '/').then(function (hasSS) {
-                        scope.syncAllByDefault = !hasSS;
+                    ignoreService.dirHasCatchAll(scope.folderId, '/').then(function (hasCatchAll) {
+                        scope.syncAllByDefault = !hasCatchAll;
                     });
 
                     $http.get(urlbase + '/db/browse?folder=' + encodeURIComponent(scope.folderId) + '&levels=1')
@@ -171,10 +171,10 @@ angular.module('syncthing.core')
 
                             var promise;
                             if (node.folder) {
-                                // checked   (node.selected=true)  → everything syncs  → enableSS=false
-                                // unchecked (node.selected=false) → not all syncs     → enableSS=true
-                                var enableSS = !node.selected;
-                                promise = ignoreService.toggleDirSelectiveSync(scope.folderId, node.key, enableSS);
+                                // checked   (node.selected=true)  → everything syncs  → addCatchAll=false
+                                // unchecked (node.selected=false) → not all syncs     → addCatchAll=true
+                                var addCatchAll = !node.selected;
+                                promise = ignoreService.toggleDirCatchAll(scope.folderId, node.key, addCatchAll);
                             } else {
                                 // For files: checkbox = syncing.
                                 // selected=true  → was ignored → user wants to START syncing
@@ -200,9 +200,9 @@ angular.module('syncthing.core')
                                                 refreshNodeStatus(child);
                                             });
                                         }
-                                        // Re-read root SS state — any write may have added/removed *.
-                                        ignoreService.hasDirSelectiveSync(scope.folderId, '/').then(function (hasSS) {
-                                            scope.syncAllByDefault = !hasSS;
+                                        // Re-read root catch-all state — any write may have added/removed *.
+                                        ignoreService.dirHasCatchAll(scope.folderId, '/').then(function (hasCatchAll) {
+                                            scope.syncAllByDefault = !hasCatchAll;
                                         });
                                     }, 800);
                                     pendingTimeouts.push(h);
@@ -234,10 +234,10 @@ angular.module('syncthing.core')
                     if (!node || !node.key || !tree) return;
 
                     if (node.folder) {
-                        // A directory is SS-on (unchecked) if Syncthing considers it
-                        // ignored (blocked by an ancestor catch-all) OR if it has its
-                        // own dir/* pattern. Both signals are needed: local.ignored
-                        // catches ancestor-inherited blocking; dir/* catches explicit SS.
+                        // A directory is unchecked if Syncthing considers it ignored
+                        // (blocked by an ancestor catch-all) OR if it has its own dir/*.
+                        // Both signals are needed: local.ignored catches ancestor-inherited
+                        // blocking; dir/* catches an explicit catch-all on this directory.
                         var dirPath = node.key.replace(/^\/+/, '');
                         $http.get(
                             urlbase + '/db/file?folder=' + encodeURIComponent(scope.folderId) +
@@ -249,19 +249,19 @@ angular.module('syncthing.core')
                                 node.setSelected(false, { noEvents: true });
                                 node.data.statusLoaded = true;
                             } else {
-                                ignoreService.hasDirSelectiveSync(scope.folderId, node.key)
-                                    .then(function (hasSS) {
+                                ignoreService.dirHasCatchAll(scope.folderId, node.key)
+                                    .then(function (hasCatchAll) {
                                         if (!tree) return;
-                                        node.setSelected(!hasSS, { noEvents: true });
+                                        node.setSelected(!hasCatchAll, { noEvents: true });
                                         node.data.statusLoaded = true;
                                     });
                             }
                         }, function () {
                             // Not in local index yet — check patterns only.
-                            ignoreService.hasDirSelectiveSync(scope.folderId, node.key)
-                                .then(function (hasSS) {
+                            ignoreService.dirHasCatchAll(scope.folderId, node.key)
+                                .then(function (hasCatchAll) {
                                     if (!tree) return;
-                                    node.setSelected(!hasSS, { noEvents: true });
+                                    node.setSelected(!hasCatchAll, { noEvents: true });
                                     node.data.statusLoaded = true;
                                 });
                         });
