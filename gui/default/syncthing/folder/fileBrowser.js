@@ -28,6 +28,7 @@ angular.module('syncthing.core')
                 scope.error      = null;
                 scope.empty      = false;
                 scope.ambiguous  = null;
+                scope.rootSS     = false;
 
                 function cancelPendingTimeouts() {
                     pendingTimeouts.forEach(function (h) { $timeout.cancel(h); });
@@ -51,10 +52,19 @@ angular.module('syncthing.core')
                     if (tree) { try { tree.destroy(); } catch(e) {} tree = null; }
                 });
 
+                scope.toggleRootSS = function () {
+                    // rootSS is already flipped by ng-model; call through to the service.
+                    ignoreService.toggleDirSelectiveSync(scope.folderId, '/', scope.rootSS);
+                };
+
                 scope.load = function () {
                     scope.loading = true;
                     scope.error   = null;
                     scope.empty   = false;
+
+                    ignoreService.hasDirSelectiveSync(scope.folderId, '/').then(function (hasSS) {
+                        scope.rootSS = hasSS;
+                    });
 
                     $http.get(urlbase + '/db/browse?folder=' + encodeURIComponent(scope.folderId) + '&levels=1')
                         .then(function (r) {
