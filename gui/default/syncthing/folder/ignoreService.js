@@ -25,9 +25,9 @@
 //
 //   ✓→✗  file   (stop syncing):
 //     Walk UP from the file's parent. For every ancestor directory that does
-//     not yet have SS, enable SS (add `dir/*`). Insert `!/dir` before the
-//     grandparent's catch-all if needed so the dir stays traversable. Stop
-//     when an ancestor already has SS or we have processed root.
+//     not yet have a catch-all, add `dir/*` to it. Insert `!/dir` before
+//     the grandparent's catch-all if needed so the dir stays traversable.
+//     Stop when an ancestor already has a catch-all or we reach root.
 //     The file is then automatically blocked by its nearest ancestor's catch-all.
 //
 //   ✗→✓  file   (start syncing):
@@ -112,8 +112,8 @@ angular.module('syncthing.core')
             );
         }
 
-        // True if selective sync is enabled for `dir` (i.e. `dir/*` is present).
-        function hasDirSelectiveSync(folderId, dir) {
+        // True if `dir` has a catch-all pattern (i.e. `dir/*` is present).
+        function dirHasCatchAll(folderId, dir) {
             dir = norm(dir);
             var ca = catchAllIn(dir);
             return getPatterns(folderId).then(function (patterns) {
@@ -121,14 +121,14 @@ angular.module('syncthing.core')
             });
         }
 
-        // Enable SS on every ancestor of `path` that does not yet have it,
-        // walking up until we hit an ancestor that already has SS or we pass root.
+        // Add a catch-all to every ancestor of `path` that does not yet have one,
+        // walking up until we hit an ancestor that already has one or we reach root.
         // Mutates `updated` in place. Single write is done by the caller.
-        function enableSSUpward(path, updated) {
+        function addCatchAllsUpward(path, updated) {
             var dir = parentDir(norm(path));
             while (true) {
                 var ca = catchAllIn(dir);
-                if (updated.indexOf(ca) !== -1) { break; } // ancestor already has SS — stop
+                if (updated.indexOf(ca) !== -1) { break; } // ancestor already has a catch-all — stop
                 updated.push(ca);
                 if (dir === '/') { break; } // just processed root — done
                 // Insert !/dir before the parent catch-all so this dir stays traversable.
@@ -141,8 +141,10 @@ angular.module('syncthing.core')
             }
         }
 
-        // Toggle selective sync for a directory. Resolves to { ok: true }.
-        function toggleDirSelectiveSync(folderId, path, enableSS) {
+        // Add or remove the catch-all for a directory. Resolves to { ok: true }.
+        // addCatchAll=true  → add `dir/*` (not everything syncs by default).
+        // addCatchAll=false → remove `dir/*` (everything syncs by default).
+        function toggleDirCatchAll(folderId, path, addCatchAll) {
             path = norm(path);
             var isRoot        = (path === '/');
             var dirCatchAll   = catchAllIn(path);
@@ -153,10 +155,9 @@ angular.module('syncthing.core')
                 var updated = patterns.slice();
                 var parentIdx;
 
-                if (enableSS) {
+                if (addCatchAll) {
                     // Remove any existing child patterns under dir/ first — they are
                     // now governed by dir/* and would be redundant or contradictory.
-                    // Reuse the same filter logic as the disable branch.
                     updated = updated.filter(function (pat) {
                         var bare = (pat[0] === '!') ? pat.slice(1) : pat;
                         if (bare[0] === '/') { bare = bare.slice(1); }
@@ -203,12 +204,12 @@ angular.module('syncthing.core')
                     if (!isRoot) {
                         parentIdx = updated.indexOf(parentCatchAll);
                         if (parentIdx !== -1) {
-                            // Parent has SS: keep/add !/dir so directory remains visible.
+                            // Parent has catch-all: keep/add !/dir so directory remains visible.
                             if (updated.indexOf(whitelist) === -1) {
                                 updated.splice(parentIdx, 0, whitelist);
                             }
                         } else {
-                            // Parent has no SS: remove stale !/dir if present.
+                            // Parent has no catch-all: remove stale !/dir if present.
                             var wi = updated.indexOf(whitelist);
                             if (wi !== -1) { updated.splice(wi, 1); }
                         }
@@ -272,10 +273,10 @@ angular.module('syncthing.core')
                     }
 
                     // 3. No existing pattern → file was syncing freely with no
-                    // ancestor SS. Walk up and enable SS on each ancestor that
-                    // lacks it. The file is then blocked by the nearest catch-all.
+                    // ancestor catch-all. Walk up and add one to each ancestor
+                    // that lacks it. The file is then blocked by the nearest one.
                     updated = patterns.slice();
-                    enableSSUpward(path, updated);
+                    addCatchAllsUpward(path, updated);
                     return setPatterns(folderId, updated).then(ok);
                 }
             });
@@ -297,8 +298,8 @@ angular.module('syncthing.core')
         return {
             getPatterns:            getPatterns,
             setPatterns:            setPatterns,
-            hasDirSelectiveSync:    hasDirSelectiveSync,
-            toggleDirSelectiveSync: toggleDirSelectiveSync,
+            dirHasCatchAll:    dirHasCatchAll,
+            toggleDirCatchAll: toggleDirCatchAll,
             togglePath:             togglePath
         };
     }]);
