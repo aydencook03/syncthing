@@ -97,19 +97,25 @@ angular.module('syncthing.core')
             );
         }
 
-        // True if `dir` is SBD: no own catch-all, and not blocked by an ancestor
-        // catch-all (or whitelisted out of one). Pure pattern read — no lag.
+        // True if `dir` is SBD: no own catch-all, and not governed by any
+        // ancestor catch-all unless whitelisted out of it. Pure pattern read — no lag.
         function dirSyncsAllByDefault(folderId, dir) {
             dir = norm(dir);
-            var own      = catchAllIn(dir);    // blocks contents of dir
-            var ancestor = catchAllFor(dir);   // blocks dir itself
-            var wl       = '!' + dir;          // exempts dir from ancestor catch-all
             return getPatterns(folderId).then(function (patterns) {
-                if (patterns.indexOf(own) !== -1) { return false; }
-                var caIdx = patterns.indexOf(ancestor);
-                if (caIdx !== -1) {
-                    var wlIdx = patterns.indexOf(wl);
-                    if (wlIdx === -1 || wlIdx > caIdx) { return false; }
+                // Blocked by own catch-all?
+                if (patterns.indexOf(catchAllIn(dir)) !== -1) { return false; }
+                // Walk every ancestor: if its catch-all is present and dir is not
+                // whitelisted before it, dir is governed by that catch-all.
+                var cur = dir;
+                while (cur !== '/') {
+                    var ca    = catchAllFor(cur);   // catch-all governing cur
+                    var caIdx = patterns.indexOf(ca);
+                    if (caIdx !== -1) {
+                        var wl    = '!' + cur;
+                        var wlIdx = patterns.indexOf(wl);
+                        if (wlIdx === -1 || wlIdx > caIdx) { return false; }
+                    }
+                    cur = parentDir(cur);
                 }
                 return true;
             });
