@@ -28,7 +28,7 @@ angular.module('syncthing.core')
                 scope.error      = null;
                 scope.empty      = false;
                 scope.ambiguous  = null;
-                scope.rootSS     = false;
+                scope.syncAllByDefault = false;
 
                 function cancelPendingTimeouts() {
                     pendingTimeouts.forEach(function (h) { $timeout.cancel(h); });
@@ -53,13 +53,26 @@ angular.module('syncthing.core')
                 });
 
                 scope.toggleRootSS = function () {
-                    // rootSS is already flipped by ng-model before this fires.
-                    var intended = scope.rootSS;
-                    ignoreService.toggleDirSelectiveSync(scope.folderId, '/', intended)
+                    // syncAllByDefault is already flipped by ng-model before this fires.
+                    // checked (true)  = everything syncs = SS off (enableSS=false)
+                    // unchecked (false) = not all syncs  = SS on  (enableSS=true)
+                    var intended = scope.syncAllByDefault;
+                    var enableSS = !intended;
+                    ignoreService.toggleDirSelectiveSync(scope.folderId, '/', enableSS)
                         .then(function (result) {
                             if (!result.ok) {
-                                // Revert on failure (shouldn't happen — root SS has no ambiguity path).
-                                scope.rootSS = !intended;
+                                scope.syncAllByDefault = !intended;
+                            } else {
+                                // Refresh all rendered top-level nodes — root SS change
+                                // affects the effective state of every child.
+                                var h = $timeout(function () {
+                                    if (!tree) return;
+                                    tree.getRootNode().visit(function (child) {
+                                        child.data.statusLoaded = false;
+                                        refreshNodeStatus(child);
+                                    });
+                                }, 800);
+                                pendingTimeouts.push(h);
                             }
                         });
                 };
@@ -70,7 +83,7 @@ angular.module('syncthing.core')
                     scope.empty   = false;
 
                     ignoreService.hasDirSelectiveSync(scope.folderId, '/').then(function (hasSS) {
-                        scope.rootSS = hasSS;
+                        scope.syncAllByDefault = !hasSS;
                     });
 
                     $http.get(urlbase + '/db/browse?folder=' + encodeURIComponent(scope.folderId) + '&levels=1')
@@ -158,9 +171,8 @@ angular.module('syncthing.core')
 
                             var promise;
                             if (node.folder) {
-                                // For directories: checkbox = selective sync OFF.
-                                // checked   → SS was ON  → user wants SS OFF (enableSS=false)
-                                // unchecked → SS was OFF → user wants SS ON  (enableSS=true)
+                                // checked   (node.selected=true)  → everything syncs  → enableSS=false
+                                // unchecked (node.selected=false) → not all syncs     → enableSS=true
                                 var enableSS = !node.selected;
                                 promise = ignoreService.toggleDirSelectiveSync(scope.folderId, node.key, enableSS);
                             } else {
