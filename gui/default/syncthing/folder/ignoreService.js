@@ -22,22 +22,25 @@
 // ─── State machine ───────────────────────────────────────────────────────────
 //
 //   ✓→✗  file  (stop syncing):
-//     Walk UP from the file's parent. For every ancestor that is SBD, disable
-//     SBD (add `dir/*`), inserting `!/dir` before the grandparent catch-all
-//     so the dir stays traversable. Stop when an ancestor is already not-SBD
-//     or we reach root. The file is then blocked by the nearest catch-all.
+//     If a `!/file` whitelist exists, remove it (re-exposes file to catch-all).
+//     If a literal ignore entry exists, no-op.
+//     Otherwise: walk UP disabling SBD on each SBD ancestor until we hit a
+//     not-SBD ancestor or root. File is then blocked by the nearest catch-all.
 //
 //   ✗→✓  file  (start syncing):
-//     Insert `!/file` before the direct-parent catch-all.
+//     If a literal ignore entry exists, remove it.
+//     If the direct-parent catch-all exists, insert `!/file` before it.
+//     Otherwise: ambiguous (non-literal pattern in control) — surface to user.
 //
 //   ✓→✗  dir   (disable SBD):
-//     Clean up child patterns first. Add `dir/*`. If parent is not-SBD,
-//     insert `!/dir` before its catch-all so this dir stays traversable.
+//     Clean up child patterns first (they become stale under the new catch-all).
+//     Add `dir/*`. If parent is not-SBD, insert `!/dir` before its catch-all
+//     so this dir stays traversable.
 //
 //   ✗→✓  dir   (enable SBD):
 //     Remove `dir/*` and all patterns under `dir/` (stale without the
-//     catch-all). Then: keep/add `!/dir` if parent is not-SBD (so the dir
-//     remains visible), remove it if parent is SBD.
+//     catch-all). Keep/add `!/dir` if parent is not-SBD (so the dir
+//     remains visible); remove it if parent is SBD.
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
